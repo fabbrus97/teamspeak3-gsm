@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "coap_debug.h": "c",
+        "plugin.h": "c"
+    }
+}
