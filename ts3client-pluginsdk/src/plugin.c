@@ -913,16 +913,17 @@ void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) 
 
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
 	printf("we got voice!\n");
-	for (int i = 0; i < sampleCount; i++)
-		printf("%#06x", samples[i]);
+	/*for (int i = 0; i < sampleCount; i++)
+		printf("%#06x", samples[i]);*/
 	printf("\nusing %i channels\n", channels);
 	int res = send_voice(samples, sampleCount, channels);
 	printf("We got %i sample counts\n", sampleCount);
-	if (res == EXIT_FAILURE)
+	/*if (res == EXIT_FAILURE)
 		printf("FAILURE ❗❗❗\n");
 	else if (res == EXIT_SUCCESS){
 		printf("SUCCESS 🏄🏄🏄\n");
-	}
+	}*/
+
 	// printf("[Original]\n");
 
 	// for (size_t i = 0; i < 70; i++){

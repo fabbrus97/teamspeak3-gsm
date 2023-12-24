@@ -1,6 +1,6 @@
 #include "server.h"
 
-char* server_address = "127.0.0.1";
+char* server_address = "192.168.1.17";
 char* server_port = "5683";
 static unsigned int token_obs = 0;
 sem_t sem_voice_buffer; 
@@ -133,6 +133,7 @@ uint8_t* convert_short_to_uint8(short * samples, int count){
 
 int send_voice(short* samples, int sample_counter, int channels){
 
+    sample_counter = sample_counter > 100 ? 100 : sample_counter; 
     //0 means the semaphore is shared between threads
     //1 is the initial value of the semaphore
     sem_init(&sem_voice_buffer, 0, 1);
@@ -147,7 +148,7 @@ int send_voice(short* samples, int sample_counter, int channels){
     /* coap_register_response_handler(ctx, response_handler); */
     coap_register_response_handler(ctx, (coap_response_handler_t)resps_hndl);
     /* construct CoAP message */
-    pdu = coap_pdu_init(COAP_MESSAGE_CON,
+    pdu = coap_pdu_init(COAP_MESSAGE_NON,
                         COAP_REQUEST_CODE_POST,
                         coap_new_message_id(session),
                         coap_session_max_pdu_size(session));
@@ -167,8 +168,9 @@ int send_voice(short* samples, int sample_counter, int channels){
     printf("send_voice: payload added\n");
 
     /* add a Uri-Path option */
-    const char *tag = "voice_data_rcv";
-    coap_add_option(pdu, COAP_OPTION_URI_PATH, 10,
+    const char *tag = "talk";
+    // const char *tag = "voice_data_rcv";
+    coap_add_option(pdu, COAP_OPTION_URI_PATH, 5,
                     tag);
 
     coap_show_pdu(LOG_WARNING, pdu);
@@ -180,8 +182,14 @@ int send_voice(short* samples, int sample_counter, int channels){
 
     printf("going in while...\n");
 
-    while (have_response == 0)
-      coap_io_process(ctx, COAP_IO_WAIT);
+    // coap_io_process(ctx, COAP_IO_NO_WAIT);
+
+    int retries=30;
+
+    while (have_response == 0 && retries > 0){
+      coap_io_process(ctx, COAP_IO_NO_WAIT);
+      retries--;
+    }
 
     have_response = 0;
 
