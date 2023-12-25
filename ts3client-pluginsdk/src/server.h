@@ -14,6 +14,8 @@
 #include <coap3/coap_debug.h>
 
 #include <semaphore.h>
+#include <kissfft/kiss_fft.h>
+#include <kissfft/kiss_fftr.h>
 
 // char* server_address;
 // char* server_port;

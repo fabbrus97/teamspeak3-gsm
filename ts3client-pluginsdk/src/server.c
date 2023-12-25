@@ -121,12 +121,32 @@ int connect_to_coap_server(){
 }
 
 uint8_t* convert_short_to_uint8(short * samples, int count){
-  uint8_t *data = malloc(count * sizeof(uint8_t));
+  // uint8_t *data = malloc(count * sizeof(uint8_t));
+  kiss_fft_scalar data[count];
 
   for (int i = 0; i < count; i++){
-    uint8_t uint8Value = (uint8_t)((255.0*((samples[i]+32767)/65536.0)));
-    data[i] = uint8Value;
+    // uint8_t uint8Value = (uint8_t)((255.0*((samples[i]+32767)/65536.0)));
+    // // data[i] = uint8Value;
+    data[i] = samples[i];
   }
+  int is_inverse_fft = 0;
+  printf("allocating kiss_fft...\n");
+  kiss_fft_cfg cfg = kiss_fft_alloc( 96000 ,is_inverse_fft ,0,0 );
+  printf("creating the buffer...\n");
+  kiss_fft_cpx output[count];
+  printf("converting...\n");
+  kiss_fftr(cfg, data, output);
+  
+  printf("filtering...\n");
+  for (int i=0; i<count; i++){
+    printf("whatever r is amounts to %f\n", output[i].r);
+    if (output[i].r > 8000) output[i].r = 0;
+  }
+
+  is_inverse_fft = 1;
+  cfg = kiss_fft_alloc( 8000 ,is_inverse_fft ,0,0 );
+  kiss_fftr(cfg, (const kiss_fft_scalar*) output, data);
+  kiss_fft_free(cfg);
 
   return data;
 }
