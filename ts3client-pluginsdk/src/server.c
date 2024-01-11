@@ -1,6 +1,9 @@
 #include "server.h"
+#include "ts3_functions.h"
 
-char* server_address = "192.168.1.17";
+
+// char* server_address = "127.0.0.1";
+char* server_address = "192.168.1.18";
 char* server_port = "5683";
 static unsigned int token_obs = 0;
 sem_t sem_voice_buffer; 
@@ -9,8 +12,14 @@ static coap_context_t *ctx;
 static coap_session_t *session;
 static short* voice_buffer;
 static int sample_counter = 0;
+int socket_desc;
+struct sockaddr_in server_addr, client_addr;
+char /* server_message[2000], */ client_message[2000];
+int client_struct_length; // = sizeof(client_addr);
+
 
 static coap_pdu_t* coap_new_request(coap_optlist_t **options, unsigned char *data, size_t length);
+
 
 //from https://github.com/obgm/libcoap-minimal
 int resolve_address(const char *host, const char *service, coap_address_t *dst) {
@@ -75,6 +84,38 @@ int voice_hndl(coap_session_t *session, coap_pdu_t *sent, coap_pdu_t *received, 
       return COAP_RESPONSE_OK;
 };
 
+int start_udp_socket(){
+    
+    // Clean buffers:
+    // memset(server_message, '\0', sizeof(server_message));
+    client_struct_length = sizeof(client_addr);
+    memset(client_message, '\0', sizeof(client_message));
+    
+    // Create UDP socket:
+    socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    
+    if(socket_desc < 0){
+        printf("Error while creating socket\n");
+        return -1;
+    }
+    printf("Socket created successfully\n");
+    
+    // Set port and IP:
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(UDP_LISTEN_PORT);
+    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    
+    // Bind to the set port and IP:
+    if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+        printf("Couldn't bind to the port\n");
+        return -1;
+    }
+    printf("Done with binding\n");
+    
+    printf("Listening for incoming messages...\n\n");
+    return 0;
+}
+
 //this function sends commands (e.g. "call +39123456789")
 int connect_to_coap_server(){
 
@@ -120,102 +161,223 @@ int connect_to_coap_server(){
 
 }
 
-uint8_t* convert_short_to_uint8(short * samples, int count){
-  // uint8_t *data = malloc(count * sizeof(uint8_t));
-  kiss_fft_scalar data[count];
-
+// void convert_short_to_uint8(short * samples, int count, uint8_t* out){
+//   uint8_t uint8Value = 0;
+//   for (int i = 0; i < count; i++){
+//     if (samples[i] < 0) uint8Value = (uint8_t)(((127.0)*(1 - (samples[i] / -32767.0))));
+//     else uint8Value = (uint8_t)((127*(samples[i]/32767.0)) + 128); ///65536.0)));
+//     out[i] = uint8Value;
+    
+//   }
+// }
+void convert_short_to_uint8(short * samples, int count, uint8_t* out){
+  uint8_t uint8Value = 0;
+  int pos=0;
   for (int i = 0; i < count; i++){
-    // uint8_t uint8Value = (uint8_t)((255.0*((samples[i]+32767)/65536.0)));
-    // // data[i] = uint8Value;
-    data[i] = samples[i];
-  }
-  int is_inverse_fft = 0;
-  printf("allocating kiss_fft...\n");
-  kiss_fft_cfg cfg = kiss_fft_alloc( 96000 ,is_inverse_fft ,0,0 );
-  printf("creating the buffer...\n");
-  kiss_fft_cpx output[count];
-  printf("converting...\n");
-  kiss_fftr(cfg, data, output);
-  
-  printf("filtering...\n");
-  for (int i=0; i<count; i++){
-    printf("whatever r is amounts to %f\n", output[i].r);
-    if (output[i].r > 8000) output[i].r = 0;
-  }
+  //   if (samples[i] < 0) uint8Value = (uint8_t)(((127.0)*(1 - (samples[i] / -32767.0))));
+  //   else uint8Value = (uint8_t)((127*(samples[i]/32767.0)) + 128); ///65536.0)));
+  //    out[i] = uint8Value;
+  //    printf("read %i -> %i\n", samples[i], uint8Value);
+  //  }
+    uint8_t byte1 = samples[i] & 0xFF;
+    uint8_t byte2 = ((samples[i] >> 8) & 0xFF);
+    out[pos] = byte1; out[pos+1] = byte2;
+    pos+=2;
+ }
+}
 
-  is_inverse_fft = 1;
-  cfg = kiss_fft_alloc( 8000 ,is_inverse_fft ,0,0 );
-  kiss_fftr(cfg, (const kiss_fft_scalar*) output, data);
-  kiss_fft_free(cfg);
 
-  return data;
+void downsample_soxr(short* ibuffer, short* obuffer, int ilen, int olen) {
+    // Set input and output rates
+    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
+
+    // Create a SoXR resampler
+    soxr_t resampler = soxr_create(ISIZE, OSIZE, 1, NULL, &ioSpec, NULL, NULL);
+
+    // Determine input and output buffer sizes
+    // int obuf_size = (size_t)(ilen * OSIZE / ISIZE + .5);
+    // printf("soxr: input size is %i, output size is %i\n", ilen, obuf_size);
+    printf("soxr: allocating memory\n");
+    // obuffer = (short*)malloc(sizeof(short) * obuf_size);
+
+    size_t idone, odone;
+    soxr_error_t error;
+
+    printf("soxr: resampling...\n");
+    error = soxr_process(resampler, ibuffer, ilen, &idone, obuffer, olen, &odone);
+    printf("soxr: done\n");
+
+    if (error) {
+      fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));
+      obuffer = NULL;
+    }
+
+    // Clean up
+    soxr_delete(resampler);
+}
+
+// Function to apply gain reduction to audio samples
+void apply_gain(short* samples, size_t num_samples, double gain) {
+    for (size_t i = 0; i < num_samples; ++i) {
+        // Apply gain to each sample
+        samples[i] = (short)(samples[i] * gain);
+    }
 }
 
 int send_voice(short* samples, int sample_counter, int channels){
 
-    sample_counter = sample_counter > 100 ? 100 : sample_counter; 
+    // sample_counter = sample_counter > 100 ? 100 : sample_counter; //TODO
+    int obuf_size = (size_t)(sample_counter * OSIZE / ISIZE + .5);    
+    short downsampled[obuf_size];
+    uint8_t tmp[116];
     //0 means the semaphore is shared between threads
     //1 is the initial value of the semaphore
     sem_init(&sem_voice_buffer, 0, 1);
 
     // demo_write_voice(samples, sample_counter);
 
-    //samples: signed 16 bit
-    coap_pdu_t *pdu = NULL;
+    
 
-    int result = EXIT_FAILURE;; 
+    int result = EXIT_FAILURE;
 
     /* coap_register_response_handler(ctx, response_handler); */
     coap_register_response_handler(ctx, (coap_response_handler_t)resps_hndl);
-    /* construct CoAP message */
-    pdu = coap_pdu_init(COAP_MESSAGE_NON,
-                        COAP_REQUEST_CODE_POST,
-                        coap_new_message_id(session),
-                        coap_session_max_pdu_size(session));
-    if (!pdu) {
-      coap_log_impl(LOG_EMERG, "cannot create PDU\n" );
-      goto finish;
-    }
+    
 
     printf("send_voice: trying to add the payload\n");
 
-    uint8_t* data = convert_short_to_uint8(samples, sample_counter);
-    if (!coap_add_data(pdu, sample_counter, data)){
-        coap_log_impl(LOG_ERR, "cannot add payload\n");
-        goto finish;
+    // int out_samples = (size_t)(sample_counter * OSIZE / ISIZE + .5);
+    // short* downsampled = (short*)malloc(sizeof(short) * out_samples);
+
+   
+    printf("downsampling using soxr\n");
+    // downsample_soxr(samples, downsampled, sample_counter, out_samples);    
+    
+    size_t idone = 0, odone = 0;    
+    soxr_error_t error;    
+    
+    // Read from input file    
+    
+    // short obuf[obuf_size];
+    printf("output buffer has size %i\n", obuf_size);    
+
+    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);   
+    soxr_t resampler = soxr_create(ISIZE, OSIZE, 1, NULL, &ioSpec, NULL, NULL);     
+    // Resample the input buffer    
+    error = soxr_process(resampler, samples, sample_counter, &idone, downsampled, obuf_size, &odone);    
+    // error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of channels. */
+    //   samples, sample_counter, NULL,                              /* Input. */
+    //   downsampled, obuf_size, &odone,                             /* Output. */
+    //   NULL, NULL, NULL);                             /* Default configuration.*/
+
+    if (error) {    
+        fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));    
+    }    
+    
+    // apply_gain(downsampled, odone, 0.2);
+
+    // FILE* fin_orig = fopen("test_voice_no_ds.pcm", "a");
+    // FILE* fin_ds = fopen("test_voice_ds.pcm", "a");
+
+    // fwrite(samples, sizeof(short), sample_counter, fin_orig);
+    // fwrite(downsampled, sizeof(short), obuf_size, fin_ds);
+
+    // fclose(fin_orig);
+    // fclose(fin_ds);
+
+    printf("converting to uint8_t\n");
+    // uint8_t* data = (uint8_t *)malloc(sizeof(uint8_t) * odone);
+    // uint8_t* data = (uint8_t *)malloc(sizeof(uint8_t) * sample_counter);
+    
+    // convert_short_to_uint8(samples, sample_counter, data);
+    uint8_t data[odone*2];
+
+    convert_short_to_uint8(downsampled, odone, data);
+    // fwrite(data, sizeof(uint8_t), odone, fin_ds);
+    // fclose(fin_ds);
+
+    printf("done, sending...\n");
+    printf("total size to send: %i expected send: %i\n", odone*2, (odone*2)/116);
+    
+    int sent = 0;
+    int mycounter = 1;
+    while (sent < odone*2){
+      int available = odone*2 - sent > 116 ? 116 : odone*2 - sent;
+      memcpy(tmp, data, available);
+
+      printf("send %i first 10 bytesa are: ", mycounter);
+      for (int i = 0; i<10; i++) printf("%i ", tmp[i]);
+      printf("\n");
+      mycounter += 1;
+
+      //samples: signed 16 bit
+      coap_pdu_t *pdu = NULL;
+      /* construct CoAP message */
+      pdu = coap_pdu_init(COAP_MESSAGE_NON,
+                          COAP_REQUEST_CODE_POST,
+                          coap_new_message_id(session),
+                          coap_session_max_pdu_size(session));
+      if (!pdu) {
+        coap_log_impl(LOG_EMERG, "cannot create PDU\n" );
+        // goto finish;
+        return result;
+      }
+      
+      printf("adding payload...\n");
+
+      if (!coap_add_data(pdu, available, &(data[sent]))){
+          coap_log_impl(LOG_ERR, "cannot add payload\n");
+          // goto finish;
+          return result;
+      }
+
+      printf("send_voice: payload added\n");
+
+      /* add a Uri-Path option */
+      const char *tag = "talk";
+      // const char *tag = "voice_data_rcv";
+      coap_add_option(pdu, COAP_OPTION_URI_PATH, 4,
+                      tag);
+
+      coap_show_pdu(LOG_WARNING, pdu);
+      /* and send the PDU */
+      if (coap_send(session, pdu) == COAP_INVALID_MID) {
+        coap_log_impl(LOG_ERR, "cannot send CoAP pdu\n");
+        // goto finish;
+        return result;
+      }
+
+      printf("going in while...\n");
+
+      // coap_io_process(ctx, COAP_IO_NO_WAIT);
+
+      int retries=30;
+
+      while (have_response == 0 && retries > 0){
+        coap_io_process(ctx, COAP_IO_NO_WAIT);
+        retries--;
+      }
+
+      // struct timespec myts; 
+      // myts.tv_sec=0;
+      // myts.tv_nsec = 100;
+      // nanosleep(&myts, &myts);
+
+      have_response = 0;
+
+      result = EXIT_SUCCESS;
+
+      printf("trying to reset tmp...\n");
+      memset(tmp, 0, 116);
+      printf("done\n");
+
+      sent += available;
+
     }
 
-    printf("send_voice: payload added\n");
-
-    /* add a Uri-Path option */
-    const char *tag = "talk";
-    // const char *tag = "voice_data_rcv";
-    coap_add_option(pdu, COAP_OPTION_URI_PATH, 5,
-                    tag);
-
-    coap_show_pdu(LOG_WARNING, pdu);
-    /* and send the PDU */
-    if (coap_send(session, pdu) == COAP_INVALID_MID) {
-      coap_log_impl(LOG_ERR, "cannot send CoAP pdu\n");
-      goto finish;
-    }
-
-    printf("going in while...\n");
-
-    // coap_io_process(ctx, COAP_IO_NO_WAIT);
-
-    int retries=30;
-
-    while (have_response == 0 && retries > 0){
-      coap_io_process(ctx, COAP_IO_NO_WAIT);
-      retries--;
-    }
-
-    have_response = 0;
-
-    result = EXIT_SUCCESS;
-
-    finish:
+    printf("I'm out of for, coap data sent\n");
+    
+    // finish:
 
     // printf("coap_session_release\n");
     // coap_session_release(session);
@@ -223,6 +385,13 @@ int send_voice(short* samples, int sample_counter, int channels){
     // coap_free_context(ctx);
     // printf("coap_cleanup\n");
     // coap_cleanup();
+
+    soxr_delete(resampler);
+    
+    // printf("freeing coap data\n");
+    // free(data);
+    // printf("freeing coap data done\n");
+
 
     return result;
 }
@@ -271,16 +440,47 @@ int observe_voice(void* callback, unsigned char* data){
     return result;
 }
 
-int main(){
+/* int main(){
 
     //TODO demo
-   
 
     connect_to_coap_server();
     return 0;
 
-}
+} */
 
+void start_udp_server(){
+    // Receive client's message:
+    for(;;){
+        if (recvfrom(socket_desc, client_message, sizeof(client_message), 0,
+            (struct sockaddr*)&client_addr, &client_struct_length) < 0){
+            printf("Couldn't receive\n");
+            return -1;
+        }
+        printf("Received message from IP: %s and port: %i\n",
+              inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+        short buffer[1];
+        // ts3func.processCustomCaptureData("ts3callbotplayback", buffer, 0);
+        
+        struct timespec myts; 
+        myts.tv_sec=0;
+        myts.tv_nsec = 10000; //10 millisec
+        nanosleep(&myts, &myts);
+    }
+    // Respond to client:
+    // strcpy(server_message, client_message);
+    
+    // if (sendto(socket_desc, server_message, strlen(server_message), 0,
+    //      (struct sockaddr*)&client_addr, client_struct_length) < 0){
+    //     printf("Can't send\n");
+    //     return -1;
+    // }
+    
+    // Close the socket:
+    // close(socket_desc);
+    
+}
 
 static coap_pdu_t* coap_new_request(coap_optlist_t **options, unsigned char *data, size_t length) {
 
@@ -338,4 +538,4 @@ static coap_pdu_t* coap_new_request(coap_optlist_t **options, unsigned char *dat
   3. (?) ottieni audio dal dispositivo custom 
     acquireCustomPlaybackData
     (non so se mi serve, o basta ts3plugin_onEditPlaybackVoiceDataEvent)
-*/
+*/ 

@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "coap_debug.h": "c",
-        "plugin.h": "c"
+        "plugin.h": "c",
+        "limits.h": "c",
+        "float.h": "c",
+        "server.h": "c",
+        "ts3_functions.h": "c"
     }
 }

@@ -24,8 +24,6 @@
 #include <semaphore.h>
 #include <unistd.h>
 
-static struct TS3Functions ts3Functions;
-
 #ifdef _WIN32
 #define _strcpy(dest, destSize, src) strcpy_s(dest, destSize, src)
 #define snprintf sprintf_s
@@ -43,9 +41,12 @@ static struct TS3Functions ts3Functions;
 #define RETURNCODE_BUFSIZE 128
 
 #define PLUGIN_NAME "callbot"
-const char* scHandlerID = "ts3callbotplayback";
+const char* devID = "ts3callbotplayback";
+const char* devDisplayName = "ts3_callbot_playback";
 
 static char* pluginID = NULL;
+
+static struct TS3Functions ts3Functions;
 
 #ifdef _WIN32
 /* Helper function to convert wchar_T to Utf-8 encoded strings on Windows */
@@ -83,6 +84,11 @@ const char* ts3plugin_name() {
 	return PLUGIN_NAME;
 #endif
 }
+
+#define BUFFER_SIZE 10000
+#define MIN_BUFFER 8000
+short audio_buffer_to_ds[BUFFER_SIZE];
+int data_in_buffer = 0;
 
 /* Plugin version */
 const char* ts3plugin_version() {
@@ -125,21 +131,21 @@ int ts3plugin_init() {
     printf("PLUGIN: init\n");
 
 	//0. connect to server 
-	connect_to_coap_server();
+	// connect_to_coap_server();
+	// if (start_udp_socket() != 0){
+	// 	pritnf("Error starting udp socket");
+	// 	exit(1);
+	// }
 
 	// //1. create audio playback device
-	// if (registerCustomDevice(scHandlerID, "ts3 callbot playback", 44000, 2, 44000, 2) != ERROR_ok){
-	// 	printf("Error registering playback device\n");
-	// 	return 1;
-	// }
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 8000, 1) != ERROR_ok){
+		printf("Error registering playback device\n");
+		exit(1);
+	}
 	
-	// /* Open capture device we created earlier */
-	// if(ts3client_openCaptureDevice(scHandlerID, "custom", "customWaveDeviceId") != ERROR_ok) {
-	// 	printf("Error opening capture device\n");
-	// }
-
 	pthread_t t1;
 	pthread_create(&t1, NULL, main_loop, NULL);
+	// pthread_create(&t1, NULL, start_udp_server, (void *)(&ts3Functions));
 	
 	
 
@@ -151,7 +157,7 @@ int ts3plugin_init() {
 	ts3Functions.getPluginPath(pluginPath, PATH_BUFSIZE, pluginID);
 
 	printf("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s\n", appPath, resourcesPath, configPath, pluginPath);
-
+	
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
 	 * the plugin again, avoiding the show another dialog by the client telling the user the plugin failed to load.
@@ -160,7 +166,6 @@ int ts3plugin_init() {
 
 void* main_loop(void* arg)
 {
-	while (1){
 		/*
 			https://www.geeksforgeeks.org/use-posix-semaphores-c/
 			
@@ -169,8 +174,67 @@ void* main_loop(void* arg)
 			 - buffer delle chiamate
 			può convenire fare due thread
 		*/
-   		usleep(1); //1*10^-6 secs
-   	}
+	// Clean buffers:
+    // memset(server_message, '\0', sizeof(server_message));
+
+	int socket_desc;
+	struct sockaddr_in server_addr, client_addr;
+	char /* server_message[2000], */ client_message[6000];
+	int client_struct_length; // = sizeof(client_addr);
+
+    client_struct_length = sizeof(client_addr);
+    memset(client_message, '\0', sizeof(client_message));
+    
+    // Create UDP socket:
+    socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    
+    if(socket_desc < 0){
+        printf("Error while creating socket\n");
+        return -1;
+    }
+    printf("Socket created successfully\n");
+    
+    // Set port and IP:
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(UDP_LISTEN_PORT);
+    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    
+    // Bind to the set port and IP:
+    if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+        printf("Couldn't bind to the port\n");
+        exit(1);
+    }
+    printf("Done with binding\n");
+    
+    printf("Listening for incoming messages...\n\n");
+	
+	int lenRecv;
+	for(;;){
+		lenRecv = recvfrom(socket_desc, client_message, sizeof(client_message), NULL,
+            (struct sockaddr*)&client_addr, &client_struct_length);
+		printf("i have received: %i\n", lenRecv);
+        if (lenRecv < 0){
+            printf("Couldn't receive\n");
+			continue;
+        }
+        printf("Received message from IP: %s and port: %i\n",
+              inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+        // int buffer_length = (int)(lenRecv/2 + 0.5)+100;
+		short buffer[lenRecv];
+		for (int i = 0; i < lenRecv; i++){
+			uint8_t uintVal = client_message[i];
+			short shortVal = uintVal < 127 ? (1 - uintVal/(127))*(-32768) : ((uintVal - 127)/127)*(32768);
+			buffer[i] = shortVal;
+		}
+        ts3Functions.processCustomCaptureData(devID, buffer, lenRecv);
+        
+        struct timespec myts; 
+        myts.tv_sec=0;
+        myts.tv_nsec = 10000; //10 millisec
+        nanosleep(&myts, &myts);
+
+    }
 }
 
 /* Custom code called right before the plugin is unloaded */
@@ -771,6 +835,13 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
             ts3Functions.freeMemory(s);
         }
         ts3Functions.freeMemory(ids);
+
+		// /* Open capture device we created earlier */
+		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok) {
+			printf("Error opening capture device\n");
+			exit(1);
+		}
+
     }
 }
 
@@ -911,13 +982,29 @@ void ts3plugin_onPlaybackShutdownCompleteEvent(uint64 serverConnectionHandlerID)
 void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) {
 }
 
+int firstSend = 0;
+
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
 	printf("we got voice!\n");
 	/*for (int i = 0; i < sampleCount; i++)
 		printf("%#06x", samples[i]);*/
-	printf("\nusing %i channels\n", channels);
-	int res = send_voice(samples, sampleCount, channels);
-	printf("We got %i sample counts\n", sampleCount);
+	// for(int i = 0; i < sampleCount; i++){
+	// 	audio_buffer_to_ds[data_in_buffer+i] = samples[i];
+	// }
+	memcpy(&(audio_buffer_to_ds[data_in_buffer]), samples, sampleCount*sizeof(short));
+	
+	if (!firstSend) data_in_buffer += sampleCount; //TODO
+
+	if (data_in_buffer >= MIN_BUFFER){
+		printf("\nusing %i channels\n", channels);
+		int res = send_voice(audio_buffer_to_ds, data_in_buffer, channels);
+		// int res = send_voice(samples, sampleCount, channels);
+		printf("We got %i sample counts\n", data_in_buffer);
+
+		memset(audio_buffer_to_ds, 0, data_in_buffer);
+		data_in_buffer = 0;
+		// firstSend = 1;
+	}
 	/*if (res == EXIT_FAILURE)
 		printf("FAILURE ❗❗❗\n");
 	else if (res == EXIT_SUCCESS){
