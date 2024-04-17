@@ -132,21 +132,17 @@ int ts3plugin_init() {
 
 	//0. connect to server 
 	// connect_to_coap_server();
-	// if (start_udp_socket() != 0){
-	// 	pritnf("Error starting udp socket");
-	// 	exit(1);
-	// }
-
-	// //1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 8000, 1) != ERROR_ok){
-		printf("Error registering playback device\n");
+	if (start_udp_socket() != 0){
+		pritnf("Error starting udp socket");
 		exit(1);
 	}
-	
-	pthread_t t1;
-	pthread_create(&t1, NULL, main_loop, NULL);
-	// pthread_create(&t1, NULL, start_udp_server, (void *)(&ts3Functions));
-	
+
+	// 1. create audio playback device
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 8000, 2) != ERROR_ok){
+		printf("Error registering playback device\n");
+		exit(1);
+	}	
+
 	
 
     /* Example on how to query application, resources and configuration paths from client */
@@ -166,14 +162,14 @@ int ts3plugin_init() {
 
 void* main_loop(void* arg)
 {
-		/*
-			https://www.geeksforgeeks.org/use-posix-semaphores-c/
-			
-			TODO ci sono delle variabili da osservare:
-			 - buffer dei messaggi
-			 - buffer delle chiamate
-			può convenire fare due thread
-		*/
+	/*
+		https://www.geeksforgeeks.org/use-posix-semaphores-c/
+		
+		TODO ci sono delle variabili da osservare:
+			- buffer dei messaggi
+			- buffer delle chiamate
+		può convenire fare due thread
+	*/
 	// Clean buffers:
     // memset(server_message, '\0', sizeof(server_message));
 
@@ -747,11 +743,17 @@ void ts3plugin_initHotkeys(struct PluginHotkey*** hotkeys) {
 
 /* Clientlib */
 
+uint8_t TESTSRCBUFFER[] = {126,125,125,123,124,124,123,123,123,122,123,121,121,123,121,123,124,120,118,119,120,122,121,120,120,122,122,122,123,123,126,128,125,126,126,127,127,125,125,127,128,127,127,127,127,129,129,129,132,134,135,134,132,133,135,134,133,135,135,129,122,122,125,128,126,122,124,130,131,131,130,132,138,137,132,131,134,134,130,126,127,131,132,127,124,128,132,131,131,134,140,141,137,132,130,132,133,134,135,131,120,115,118,122,123,121,119,126,133,134,133,133,136,136,134,132,130,129,126,121,119,121,125,125,123,125,128,129,132,133,133,136,135,130,124,122,125,131,131,118,105,108,115,118,116,116,122,130,130,127,128,132,134,131,124,121,122,119,115,115,118,124,127,125,126,130,132,131,131,133,135,134,130,124,124,126,129,134,127,113,112,118,122,122,122,126,137,141,136,135,140,143,140,132,129,132,128,121,120,126,134,136,133,135,142,142,137,135,137,139,138,132,127,129,131,133,136,126,111,114,122,124,124,121,123,133,135,129,131,136,137,133,124,121,124,119,110,113,123,129,130,128,129,135,136,129,127,133,136,133,127,122,126,129,132,139,129,112,114,121,121,121,121,126,137,139,133,133,138,139,132,125,124,126,120,113,117,126,131,132,131,132,136,134,127,126,131,133,132,130,126,128,128,131,142,133,111,110,122,126,123,120,127,139,141,135,133,139,142,133,125,123,128,126,118,119,128,134,135,133,135,137,135,127,124,128,132,130,127,125,124,124,127,138,139,111,98,114,124,119,114,118,132,142,134,127,136,141,130,118,115,120,122,115,112,124,134,132,131,136,137,131,123,119,122,127,127,129,131,128,124,126,132,144,138,110,103,120,124,117,117,127,139,144,137,133,140,142,130,118,118,125,128,122,121,132,139,136,136,141,140,130,121,121,126,131,132,133,136,135,130,129,136,145,144,122,107,117,128,124,119,127,140,148,143,132,133,138,132,120,115,119,127,127,124,128,136,139,135,133,136,132,120,114,119,125,128,131,132,134,135,131,131,135,140,139,120,103,110,124,124,120,128,138,143,140,132,130,133,127,115,111,116,124,123,120,124,133,136,131,127,130,132,121,109,110,121,126,125,126,130,132,131,127,126,130,136,128,104,99,116,125,122,122,130,140,144,136,126,128,133,126,115,114,124,132,129,126,132,141,142,133,129,134,137,123,112,118,129,133,131,132,137,140,136,131,130,134,139,129,106,101,117,126,122,123,131,139,141,132,126,129,132,124,112,112,123,128,124,124,132,139,137,132,131,134,136,127,116,117,127,133,132,134,138,140,138,130,129,133,136,135,121,106,110,122,124,122,129,138,142,137,130,127,129,126,117,115,121,127,128,125,129,139,141,136,133,132,133,132,123,113,118,129,132,131,134,139,141,138,132,132,134,135,135,124,108,111,125,128,126,130,137,141,139,132,130,132,129,119,114,120,128,128,125,129,136,136,132,130,130,129,127,123,117,114,119,124,127,129,132,136,134,129,128,128,125,127,133,122,107,112,123,125,125,130,135,140,138,131,131,136,131,121,119,124,128,127,125,131,137,134,130,130,134,135,130,126,121,118,119,121,125,132,136,134,131,131,131,128,127,128,134,127,108,107,119,123,122,124,130,138,138,131,130,135,133,124,121,124,127,127,123,129,138,140,137,136,138,140,136,133,134,129,121,119,124,131,135,136,136,138,136,129,125,126,128,132,124,107,105,114,117,116,121,129,138,137,131,131,133,130,125,121,121,125,125,121,124,132,135,135,135,136,138,137,132,132,131,122,117,120,125,129,132,135,136,135,131,127,127,127,133,133,115,104,110,114,115,117,122,131,135,132,130,132,132,128,123,121,122,124,119,118,124,127,126,127,129,134,135,129,126,129,125,115,113,118,122,123,125,130,135,133,128,128,131,131,136,135,121,114,118,119,119,120,124,132,139,137,136,139,142,139,133,129,133,134,127,124,128,130,131,131,133,138,141,139,138,140,139,133,129,129,130,131,131,132,136,137,134,132,134,135,136,138,131,123,124,124,122,122,122,125,129,129,129,129,131,132,130,127,128,131,129,125,125,124,123,122,121,122,126,127,126,126,127,127,125,124,125,129,130,127,126,125,126,126,124,125,126,128,130,126,122,124,126,126,124,122,122,127,127,126,126,127,129,130,130,131,134,134,131,130,128,128,129,126,123,124,126,126,124,123,126,127,124,123,126,128,127,124,125,129,129,125,123,125,127,128,129,129,126,124,124,126,126,124,122,125,127,126,125,126,129,130,129,130,133,134,134,133,132,132,132,131,130,131,131,131,131,130,130,133};
+
 void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int newStatus, unsigned int errorNumber) {
     /* Some example code following to show how to use the information query functions. */
 
     if(newStatus == STATUS_CONNECTION_ESTABLISHED) {  /* connection established and we have client and channels available */
-        char* s;
+		pthread_t t1;
+		// pthread_create(&t1, NULL, main_loop, NULL);
+		pthread_create(&t1, NULL, receive_and_play_voice, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
+		
+		char* s;
         char msg[1024];
         anyID myID;
         uint64* ids;
@@ -836,11 +838,50 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
         }
         ts3Functions.freeMemory(ids);
 
-		// /* Open capture device we created earlier */
-		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok) {
+		// // /* Open capture device we created earlier */
+		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "", devID) != ERROR_ok) {
 			printf("Error opening capture device\n");
 			exit(1);
 		}
+
+		// //open the device for playback
+		printf("======================= DEBUG =======================\n");
+		printf("======================= ===== =======================\n");
+		char* defaultMode;
+
+		if(ts3Functions.getDefaultPlayBackMode(&defaultMode) == ERROR_ok) {
+			char*** array;
+
+			if(ts3Functions.getPlaybackDeviceList(defaultMode, &array) == ERROR_ok) {
+				for(int i=0; array[i] != NULL; ++i) {
+					printf("Playback device name: %s\n", array[i][0]);  /* First element: Device name */
+					printf("Playback device ID: %s\n",   array[i][1]);  /* Second element: Device ID */
+
+					/* Free element */
+					ts3Functions.freeMemory(array[i][0]);
+					ts3Functions.freeMemory(array[i][1]);
+					ts3Functions.freeMemory(array[i]);
+				}
+				ts3Functions.freeMemory(array);  /* Free complete array */
+			} else {
+				printf("Error getting playback device list\n");
+			}
+		} else {
+			printf("Error getting default playback mode\n");
+		}		
+		char** array;
+
+		if(ts3Functions.getPlaybackModeList(&array) == ERROR_ok) {
+			for(int i=0; array[i] != NULL; ++i) {
+				printf("Mode: %s\n", array[i]);
+				ts3Functions.freeMemory(array[i]);  // Free C-string
+			}
+			ts3Functions.freeMemory(array);  // Free the array
+		}
+		if (ts3Functions.openPlaybackDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok){
+			printf("Error opening playback device\n");
+			exit(1);
+		}	
 
     }
 }
@@ -982,8 +1023,6 @@ void ts3plugin_onPlaybackShutdownCompleteEvent(uint64 serverConnectionHandlerID)
 void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) {
 }
 
-int firstSend = 0;
-
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
 	printf("we got voice!\n");
 	/*for (int i = 0; i < sampleCount; i++)
@@ -992,9 +1031,8 @@ void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, an
 	// 	audio_buffer_to_ds[data_in_buffer+i] = samples[i];
 	// }
 	memcpy(&(audio_buffer_to_ds[data_in_buffer]), samples, sampleCount*sizeof(short));
+	data_in_buffer += sampleCount;
 	
-	if (!firstSend) data_in_buffer += sampleCount; //TODO
-
 	if (data_in_buffer >= MIN_BUFFER){
 		printf("\nusing %i channels\n", channels);
 		int res = send_voice(audio_buffer_to_ds, data_in_buffer, channels);
@@ -1003,8 +1041,8 @@ void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, an
 
 		memset(audio_buffer_to_ds, 0, data_in_buffer);
 		data_in_buffer = 0;
-		// firstSend = 1;
 	}
+	
 	/*if (res == EXIT_FAILURE)
 		printf("FAILURE ❗❗❗\n");
 	else if (res == EXIT_SUCCESS){

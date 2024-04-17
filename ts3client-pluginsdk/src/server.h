@@ -35,7 +35,7 @@ int connect_to_coap_server();
 int send_voice(short* samples, int sample_counter, int channels);
 int observe_voice(void* callback, unsigned char* data);
 int start_udp_socket();
-void start_udp_server();
+void receive_and_play_voice(void*  args);
 
 
 //in voice_buffer we write the voice data we receive from the coap server on the arduino
