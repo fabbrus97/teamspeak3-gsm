@@ -43,6 +43,7 @@
 #define PLUGIN_NAME "callbot"
 const char* devID = "ts3callbotplayback";
 const char* devDisplayName = "ts3_callbot_playback";
+sem_t c_pb_sem; 
 
 static char* pluginID = NULL;
 
@@ -66,7 +67,11 @@ static int wcharToUtf8(const wchar_t* str, char** result) {
  * If any of these required functions is not implemented, TS3 will refuse to load the plugin
  */
 
-void* main_loop(void* arg);
+//this loop is responsible for receiving data via UDP, and playing it
+void* main_loop_play(void* arg);
+//this loop is responsible for getting voice from ts server, and sending via UDP
+void* main_loop_acquire(void* arg);
+
 
 /* Unique name identifying this plugin */
 const char* ts3plugin_name() {
@@ -130,20 +135,13 @@ int ts3plugin_init() {
     /* Your plugin init code here */
     printf("PLUGIN: init\n");
 
-	//0. connect to server 
-	// connect_to_coap_server();
-	if (start_udp_socket() != 0){
-		pritnf("Error starting udp socket");
+	// 1. create audio playback device
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 48000, 1, 8000, 1) != ERROR_ok){
+		printf("Error registering playback device\n");
 		exit(1);
 	}
 
-	// 1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 8000, 2) != ERROR_ok){
-		printf("Error registering playback device\n");
-		exit(1);
-	}	
 
-	
 
     /* Example on how to query application, resources and configuration paths from client */
     /* Note: Console client returns empty string for app and resources path */
@@ -153,18 +151,172 @@ int ts3plugin_init() {
 	ts3Functions.getPluginPath(pluginPath, PATH_BUFSIZE, pluginID);
 
 	printf("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s\n", appPath, resourcesPath, configPath, pluginPath);
-	
+
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
 	 * the plugin again, avoiding the show another dialog by the client telling the user the plugin failed to load.
 	 * For normal case, if a plugin really failed to load because of an error, the correct return value is 1. */
 }
 
-void* main_loop(void* arg)
+void* main_loop_play(void* args){
+	// start udp socket
+	if (start_udp_socket() != 0){
+		printf("Error starting udp socket");
+		exit(1);
+	}
+	printf(" ========== DEBUG THREAD STARTED ========== ");
+	char* mybuffer = NULL;
+	for(;;){
+		size_t receivedBytes = 0;
+		int type = receive_data(&mybuffer, &receivedBytes);
+		// int type = 1;
+		// if (mybuffer == NULL)
+		// 	printf("mybuffer: aw shit here we go again\n");
+		// else
+		// 	printf("mybuffer: ok\n");
+
+		short audio_buffer[receivedBytes];
+		switch (type)
+		{
+		case AUDIO:
+			// printf("I HAVE RECEIVED AUDIO - %li bytes ♫♫♫\n", receivedBytes);
+			for (int i = 0; i < receivedBytes; i++){
+				// printf("byte %i ok: %i\n", i, mybuffer);
+				audio_buffer[i] = (short) (mybuffer[i] - 0x80) << 8;
+			}
+			// printf("CONVERSION OK 💥💥💥\n");
+			(*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
+			break;
+
+		default:
+			// printf("UNKNOWN DATA!!!!\n");
+
+			break;
+		}
+		// free(mybuffer);
+
+		/******** acquire custom playback ************
+		 * see https://teamspeakdocs.github.io/PluginAPI/client_html/ar01s13s05.html
+		
+
+		// printf("**** acquire custom playback ***\n");
+		size_t playbackBufferSize = 1024;
+		short playbackBuffer[playbackBufferSize];
+		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
+		// int error = 0;
+		// printf("error is %i\n", error);
+		if(error == ERROR_ok) {
+			// printf("Some audio playback available\n");
+			
+			// if (playbackBuffer != NULL){
+				playbackBuffer[0] = 0x00;
+				// printf("checking playbackbuffer: %p\n", playbackBuffer);
+				int flag=0;
+				for (int i=0; i < 10; i++){
+					// printf("checking byte %i\n", i);
+					flag += playbackBuffer[i];
+				}
+				
+				// printf("\n");
+				// Playback data available, send playbackBuffer to your custom device
+				if (flag != 0){
+					printf("i should send voice\n");
+					send_voice(&playbackBuffer, playbackBufferSize, 1); //TODO check se non sia 2
+				}
+				// else
+					// printf("but that was a lie!\n");
+			// }
+
+		} else if(error == ERROR_sound_no_data) {
+			// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
+			// pause playback for performance optimisation or send a buffer of zeros.
+			// printf("No audio playback right now\n");
+		} else {
+			// printf("Failed to get playback data\n");  // Error occured *
+		}
+		*/
+	}
+
+
+}
+void* main_loop_acquire(void* args){
+	
+
+
+	size_t playbackBufferSize = 1024;
+	short playbackBuffer[playbackBufferSize];
+	int i=0;
+	// int error = ERROR_sound_no_data;
+	struct timespec myts; 
+	myts.tv_sec=0;
+	myts.tv_nsec = 50000000L;
+	for(;;){
+		// printf("DEBUUG another loop bites the dust %i\n", i);
+
+		pthread_t         self;
+		self = pthread_self();
+		// printf("my thread id is %i\n", self);
+
+		/* Get playback data from the client lib */
+		// int error = (*((const struct TS3Functions *)args)).acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
+		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
+		//  int error = 0;
+		// printf("error is %i\n", error);
+		if(error == ERROR_ok) {
+			// printf("Some audio playback available\n");
+
+			// for (int i = 0; i < playbackBufferSize; i++){
+			// 	printf("%i,", playbackBuffer[i]);
+			// }
+			// printf("\n");	
+			
+	    
+			
+
+			// if (playbackBuffer[0] && playbackBuffer[1])
+			send_voice(&playbackBuffer, playbackBufferSize, 1);
+			/*
+			// if (playbackBuffer != NULL){
+				playbackBuffer[0] = 0;
+				// playbackBuffer[1] = 0;
+				// printf("checking playbackbuffer: %p\n", playbackBuffer);
+				int flag=0;
+				for (int i=0; i < 10; i++){
+					// printf("checking byte %i\n", i);
+					flag += playbackBuffer[i];
+				}
+				
+				printf("\n");
+				// Playback data available, send playbackBuffer to your custom device
+				if (flag != 0){
+					printf("i should send voice\n");
+					//send_voice(&playbackBuffer, playbackBufferSize, 1); //TODO check se non sia 2
+				}
+				else
+					printf("but that was a lie!\n");
+			// }*/
+
+		} else if(error == ERROR_sound_no_data) {
+			// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
+			// pause playback for performance optimisation or send a buffer of zeros.
+			printf("No audio playback right now\n");
+			nanosleep(&myts, &myts);
+		} else {
+			printf("Failed to get playback data\n");  // Error occured *
+		}
+
+		// printf("loop ended ok\n");
+
+	}
+
+
+}
+
+void* main_loop_play_old(void* arg)
 {
 	/*
 		https://www.geeksforgeeks.org/use-posix-semaphores-c/
-		
+
 		TODO ci sono delle variabili da osservare:
 			- buffer dei messaggi
 			- buffer delle chiamate
@@ -180,30 +332,30 @@ void* main_loop(void* arg)
 
     client_struct_length = sizeof(client_addr);
     memset(client_message, '\0', sizeof(client_message));
-    
+
     // Create UDP socket:
     socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    
+
     if(socket_desc < 0){
         printf("Error while creating socket\n");
         return -1;
     }
     printf("Socket created successfully\n");
-    
+
     // Set port and IP:
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(UDP_LISTEN_PORT);
     server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
-    
+
     // Bind to the set port and IP:
     if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
         printf("Couldn't bind to the port\n");
         exit(1);
     }
     printf("Done with binding\n");
-    
+
     printf("Listening for incoming messages...\n\n");
-	
+
 	int lenRecv;
 	for(;;){
 		lenRecv = recvfrom(socket_desc, client_message, sizeof(client_message), NULL,
@@ -224,8 +376,8 @@ void* main_loop(void* arg)
 			buffer[i] = shortVal;
 		}
         ts3Functions.processCustomCaptureData(devID, buffer, lenRecv);
-        
-        struct timespec myts; 
+
+        struct timespec myts;
         myts.tv_sec=0;
         myts.tv_nsec = 10000; //10 millisec
         nanosleep(&myts, &myts);
@@ -749,10 +901,8 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
     /* Some example code following to show how to use the information query functions. */
 
     if(newStatus == STATUS_CONNECTION_ESTABLISHED) {  /* connection established and we have client and channels available */
-		pthread_t t1;
-		// pthread_create(&t1, NULL, main_loop, NULL);
-		pthread_create(&t1, NULL, receive_and_play_voice, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
-		
+
+
 		char* s;
         char msg[1024];
         anyID myID;
@@ -839,7 +989,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
         ts3Functions.freeMemory(ids);
 
 		// // /* Open capture device we created earlier */
-		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "", devID) != ERROR_ok) {
+		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok) {
 			printf("Error opening capture device\n");
 			exit(1);
 		}
@@ -868,7 +1018,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 			}
 		} else {
 			printf("Error getting default playback mode\n");
-		}		
+		}
 		char** array;
 
 		if(ts3Functions.getPlaybackModeList(&array) == ERROR_ok) {
@@ -878,13 +1028,26 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 			}
 			ts3Functions.freeMemory(array);  // Free the array
 		}
+
 		if (ts3Functions.openPlaybackDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok){
 			printf("Error opening playback device\n");
 			exit(1);
-		}	
+		}
+
+		//0 means the semaphore is shared between threads
+		//1 is the initial value of the semaphore
+		// sem_init(&c_pb_sem, 0, 1);
+		
+		pthread_t t1;
+		pthread_t t2;
+		// pthread_create(&t1, NULL, main_loop_play, NULL);
+		pthread_create(&t1, NULL, main_loop_play, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
+		pthread_create(&t2, NULL, main_loop_acquire, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
 
     }
 }
+
+
 
 void ts3plugin_onNewChannelEvent(uint64 serverConnectionHandlerID, uint64 channelID, uint64 channelParentID) {
 }
@@ -1024,15 +1187,21 @@ void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) 
 }
 
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
-	printf("we got voice!\n");
+	printf("we got voice! %i samples\n", sampleCount);
+	// for (int i = 0; i < sampleCount; i++){
+	// 	printf("%i,", samples[i]);
+	// }
+	// printf("\n");
 	/*for (int i = 0; i < sampleCount; i++)
 		printf("%#06x", samples[i]);*/
 	// for(int i = 0; i < sampleCount; i++){
 	// 	audio_buffer_to_ds[data_in_buffer+i] = samples[i];
 	// }
+
+	/***
 	memcpy(&(audio_buffer_to_ds[data_in_buffer]), samples, sampleCount*sizeof(short));
 	data_in_buffer += sampleCount;
-	
+
 	if (data_in_buffer >= MIN_BUFFER){
 		printf("\nusing %i channels\n", channels);
 		int res = send_voice(audio_buffer_to_ds, data_in_buffer, channels);
@@ -1042,7 +1211,9 @@ void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, an
 		memset(audio_buffer_to_ds, 0, data_in_buffer);
 		data_in_buffer = 0;
 	}
-	
+	***/
+
+
 	/*if (res == EXIT_FAILURE)
 		printf("FAILURE ❗❗❗\n");
 	else if (res == EXIT_SUCCESS){
@@ -1060,7 +1231,7 @@ void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, an
 	// 	printf("0x%x ", (uint8_t)samples[i]);
 	// }
 	// printf("\n");
-	
+
 }
 
 
@@ -1072,6 +1243,7 @@ void ts3plugin_onEditMixedPlaybackVoiceDataEvent(uint64 serverConnectionHandlerI
 }
 
 void ts3plugin_onEditCapturedVoiceDataEvent(uint64 serverConnectionHandlerID, short* samples, int sampleCount, int channels, int* edited) {
+	printf("something something ts3plugin_onEditCapturedVoiceDataEvent\n");
 }
 
 void ts3plugin_onCustom3dRolloffCalculationClientEvent(uint64 serverConnectionHandlerID, anyID clientID, float distance, float* volume) {
