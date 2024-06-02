@@ -243,7 +243,7 @@ void* main_loop_acquire(void* args){
 	
 
 
-	size_t playbackBufferSize = 1024;
+	size_t playbackBufferSize = 960; // 1024;
 	short playbackBuffer[playbackBufferSize];
 	int i=0;
 	// int error = ERROR_sound_no_data;
@@ -252,14 +252,16 @@ void* main_loop_acquire(void* args){
 	myts.tv_nsec = 50000000L;
 	for(;;){
 		// printf("DEBUUG another loop bites the dust %i\n", i);
-
-		pthread_t         self;
-		self = pthread_self();
+		usleep(120*1000); // sleep 30 ms
+		// pthread_t         self;
+		// self = pthread_self();
 		// printf("my thread id is %i\n", self);
 
 		/* Get playback data from the client lib */
 		// int error = (*((const struct TS3Functions *)args)).acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
 		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
+		
+
 		//  int error = 0;
 		// printf("error is %i\n", error);
 		if(error == ERROR_ok) {
@@ -274,7 +276,8 @@ void* main_loop_acquire(void* args){
 			
 
 			// if (playbackBuffer[0] && playbackBuffer[1])
-			send_voice(&playbackBuffer, playbackBufferSize, 1);
+				// send_voice(playbackBuffer, playbackBufferSize, 1);
+				// memset(playbackBuffer, 0, playbackBufferSize);
 			/*
 			// if (playbackBuffer != NULL){
 				playbackBuffer[0] = 0;
@@ -296,14 +299,16 @@ void* main_loop_acquire(void* args){
 					printf("but that was a lie!\n");
 			// }*/
 
-		} else if(error == ERROR_sound_no_data) {
-			// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
-			// pause playback for performance optimisation or send a buffer of zeros.
-			printf("No audio playback right now\n");
-			nanosleep(&myts, &myts);
-		} else {
+		// } else if(error == ERROR_sound_no_data) {
+		// 	// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
+		// 	// pause playback for performance optimisation or send a buffer of zeros.
+		// 	printf("No audio playback right now\n");
+		// 	nanosleep(&myts, &myts);
+		// } else {
+		// 	printf("Failed to get playback data\n");  // Error occured *
+		// }
+		} else if (error != ERROR_sound_no_data)
 			printf("Failed to get playback data\n");  // Error occured *
-		}
 
 		// printf("loop ended ok\n");
 
@@ -1187,7 +1192,9 @@ void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) 
 }
 
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
-	printf("we got voice! %i samples\n", sampleCount);
+	// printf("we got voice! %i samples\n", sampleCount);
+	send_voice(samples, sampleCount, channels);
+
 	// for (int i = 0; i < sampleCount; i++){
 	// 	printf("%i,", samples[i]);
 	// }

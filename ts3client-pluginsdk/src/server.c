@@ -123,6 +123,13 @@ void apply_gain(short* samples, size_t num_samples, double gain) {
 
 int send_voice(short* samples, int sample_counter, int channels){
 
+    //TODO bugs:
+    // 1. non arriva audio (solo array di 0)
+    // 2. e' capitato che arrivasse dell'audio, ma quello che e' stato spedito con udp non e' stato ricevuto correttamente (es. 30 secondi di audio sono diventati 3 secondi di rumore indistinto)
+    // nota: potrebbe essere a causa di sleep e print che hanno rallentato troppo l'esecuzione e non hanno permesso l'invio corretto dei dati
+    // 3. controllare se funziona conversione con libreria soxr
+
+
     // IP address and port
     const char* ip_address = "192.168.1.6";
     int port = 6000;
@@ -150,46 +157,56 @@ int send_voice(short* samples, int sample_counter, int channels){
 
 
     // sample_counter = sample_counter > 100 ? 100 : sample_counter; //TODO
-    int obuf_size = (size_t)(sample_counter * OSIZE / ISIZE + .5);
+    // size_t obuf_size = 500; //(size_t)(sample_counter * OSIZE / (OSIZE+ISIZE) + .5);
+    size_t const obuf_size = (size_t)(sample_counter*OSIZE/ISIZE + .5);
+
     short downsampled[obuf_size];
-    uint8_t tmp[UDP_SIZE];
+    // uint8_t tmp[UDP_SIZE];
     //0 means the semaphore is shared between threads
     //1 is the initial value of the semaphore
     // sem_init(&sem_voice_buffer, 0, 1);
 
-    printf("send_voice: trying to add the payload\n");
+    // printf("send_voice: trying to add the payload\n");
     
-    printf("downsampling discarding a sample every n\n");
-    for (int i = 0, j=0; i < sample_counter; i+=ISIZE/OSIZE, j++ ){
-        downsampled[j] = samples[i];
-    }
+    // printf("downsampling discarding a sample every n\n");
+    // for (int i = 0, j=0; i < sample_counter; i+=ISIZE/OSIZE, j++ ){
+    //     downsampled[j] = samples[i];
+    // }
 
     // printf("downsampling using soxr\n");
 
-    ssize_t *idone = malloc(sizeof(ssize_t)), *odone = malloc(sizeof(ssize_t));
+    // printf("samples[i]: ");
+    // for (int i=0; i < sample_counter; i++){
+    //     printf("%i,", samples[i]);
+    // }
+    // printf("\n");
+
+    // ssize_t *idone = malloc(sizeof(ssize_t)), *odone = malloc(sizeof(ssize_t));
+    size_t odone;
     soxr_error_t error;
 
     // Read from input file
 
-    printf("output buffer has size %i\n", obuf_size);
+    // printf("output buffer has size %i\n", obuf_size);
 
-    // soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
-    // soxr_t resampler = soxr_create(ISIZE, OSIZE, 2, NULL, &ioSpec, NULL, NULL);
+    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
+    // soxr_t resampler = soxr_create(ISIZE, OSIZE, 1, &error, &ioSpec, NULL, NULL);
     // Resample the input buffer
-    // error = soxr_process(resampler, samples, sample_counter, idone, downsampled, obuf_size, odone);
-    // error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
-    //   fsamples, sample_counter, NULL,                              /* Input. */
-    //   downsampled, obuf_size, odone,                             /* Output. */
-    //   NULL, NULL, NULL);                             /* Default configuration.*/
+    // error = soxr_process(resampler, samples, ilen, NULL, downsampled, obuf_size, &odone);
 
-    if (error) {
-        fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));
-        return 1;
-    } 
+    error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
+      samples, sample_counter, NULL,                              /* Input. */
+      downsampled, obuf_size, &odone,                             /* Output. */
+      &ioSpec, NULL, NULL);                             /* Default configuration.*/
+
+    // if (error) {
+    //     fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));
+    //     return 1;
+    // } 
     
     // *odone = obuf_size;
 
-    // printf("output data (8khz): ");
+    // printf("output data (48k -> 8k): ");
     // for (int i = 0; i < obuf_size; i++){
     //     printf("%i,", downsampled[i]);
     // }
@@ -197,15 +214,25 @@ int send_voice(short* samples, int sample_counter, int channels){
     
     // printf("total size to send: %i expected send: %i\n", (*odone), ((*odone))/UDP_SIZE);
 
-    printf("converting to uint8_t\n");
+    // printf("converting to uint8_t\n");
+    if (error)
+        printf("there was an error during downsampling\n");
 
-    // uint8_t data[(*odone)];
-    uint8_t data[obuf_size];
+    if (odone == 0){
+        printf("downsample: odone is 0\n");
+        return 1;
+    }
 
-    // convert_short_to_uint8(downsampled, *odone, data);
-    convert_short_to_uint8(downsampled, obuf_size, data);
+    uint8_t data[odone];
+    // uint8_t data[obuf_size]; //TODO uncomment
+    // uint8_t data[sample_counter]; 
+    
+    convert_short_to_uint8(downsampled, odone, data);
+    // convert_short_to_uint8(downsampled, obuf_size, data);
+    // convert_short_to_uint8(samples, sample_counter, data);
+    // obuf_size = sample_counter;
 
-    printf("done, sending...\n");
+    // printf("done, sending...\n");
 
     int sent = 0;
     int mycounter = 1;
@@ -214,9 +241,18 @@ int send_voice(short* samples, int sample_counter, int channels){
         gettimeofday(&tv1, NULL);
         long long nanoseconds1 = ((long long)tv1.tv_sec * 1000000LL + (long long)tv1.tv_usec)*1000;
 
-        //int available = (*odone) - sent > UDP_SIZE ? UDP_SIZE : (*odone) - sent;
-        int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
-        memcpy(tmp, data, available);
+        int available = odone - sent > UDP_SIZE ? UDP_SIZE : odone - sent;
+        // int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
+        uint8_t tmp[available];
+        // memcpy(tmp, &(data[sent]), available);
+        memcpy(tmp, &(data[sent]), available);
+        
+        // printf("tmp[i]: ");
+        // for (int i = 0; i < available; i++){
+        //     printf("%i,",tmp[i]);
+        // }
+        // printf("\n");
+
 
         // printf("send %i first 10 bytesa are: ", mycounter);
         // for (int i = 0; i<10; i++) printf("%i ", tmp[i]);
@@ -224,7 +260,7 @@ int send_voice(short* samples, int sample_counter, int channels){
         mycounter += 1;
 
         // if (sendto(socket_desc, data, (*odone), 0,
-        if (sendto(socket_desc, data, obuf_size, 0,
+        if (sendto(socket_desc, tmp, available, 0,
                     (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0)
         {
             fprintf(stderr, "Error in sendto()\n");
@@ -234,7 +270,7 @@ int send_voice(short* samples, int sample_counter, int channels){
 
 
         // printf("trying to reset tmp...\n");
-        memset(tmp, 0, UDP_SIZE);
+        // memset(tmp, 0, UDP_SIZE);
         // printf("done\n");
 
         sent += available;
@@ -245,7 +281,7 @@ int send_voice(short* samples, int sample_counter, int channels){
         struct timespec myts;
         myts.tv_sec=0;
         myts.tv_nsec = UDP_SIZE*(10e9)/8000 - (nanoseconds2 - nanoseconds1);
-        nanosleep(&myts, &myts);
+        // nanosleep(&myts, &myts);
     }
 
     // printf("I'm out of for, data sent\n");
