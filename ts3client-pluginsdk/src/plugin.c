@@ -136,7 +136,7 @@ int ts3plugin_init() {
     printf("PLUGIN: init\n");
 
 	// 1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 48000, 1, 8000, 1) != ERROR_ok){
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  //TODO check se la seconda frequenza dev'essere 8000 o 48000
 		printf("Error registering playback device\n");
 		exit(1);
 	}
@@ -158,6 +158,7 @@ int ts3plugin_init() {
 	 * For normal case, if a plugin really failed to load because of an error, the correct return value is 1. */
 }
 
+//play data acquired from network (esp32) on ts client
 void* main_loop_play(void* args){
 	// start udp socket
 	if (start_udp_socket() != 0){
@@ -165,7 +166,8 @@ void* main_loop_play(void* args){
 		exit(1);
 	}
 	printf(" ========== DEBUG THREAD STARTED ========== ");
-	char* mybuffer = NULL;
+	// uint8_t* mybuffer = NULL;
+	uint8_t* mybuffer = NULL;
 	for(;;){
 		size_t receivedBytes = 0;
 		int type = receive_data(&mybuffer, &receivedBytes);
@@ -182,10 +184,27 @@ void* main_loop_play(void* args){
 			// printf("I HAVE RECEIVED AUDIO - %li bytes ♫♫♫\n", receivedBytes);
 			for (int i = 0; i < receivedBytes; i++){
 				// printf("byte %i ok: %i\n", i, mybuffer);
+				// printf("%i, ", mybuffer[i]);
+				// uint8_t uintval = mybuffer[i]; 
+				// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
 				audio_buffer[i] = (short) (mybuffer[i] - 0x80) << 8;
+				// audio_buffer[i] = shortVal;
+				// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
+
 			}
+			// printf("\n");
 			// printf("CONVERSION OK 💥💥💥\n");
-			(*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
+			//TODO prova a commentare comando sopra per convertire, e manda audio a 48khz S16LE
+			//NOTA S16LE richiede comunque una conversione (perche' da udp ricevi un byte alla volta, 
+			// devi leggerne due consecutivi e accorparli)
+			// (*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
+			ts3Functions.processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
+
+			// usleep(7500);
+			free(mybuffer);
+
+
+
 			break;
 
 		default:
@@ -239,20 +258,25 @@ void* main_loop_play(void* args){
 
 
 }
+
+//acquire data from ts client, not from esp32!
 void* main_loop_acquire(void* args){
 	
 
 
-	size_t playbackBufferSize = 960; // 1024;
+	// size_t playbackBufferSize = 960; // 1024;
+	size_t playbackBufferSize = 360; //360 // 1024; //TODO correlazione tra buffersize e usleep
 	short playbackBuffer[playbackBufferSize];
 	int i=0;
 	// int error = ERROR_sound_no_data;
 	struct timespec myts; 
 	myts.tv_sec=0;
 	myts.tv_nsec = 50000000L;
+	int time2sleep = (playbackBufferSize*1000000/48000);
 	for(;;){
 		// printf("DEBUUG another loop bites the dust %i\n", i);
-		usleep(120*1000); // sleep 30 ms
+		// usleep(20*1000); // sleep 30 ms
+		usleep(time2sleep); // sleep playbackBufferSize/frequency * 1000000 seconds (frequency is 48000, 1000000 is one second in nanoseconds used by usleep)
 		// pthread_t         self;
 		// self = pthread_self();
 		// printf("my thread id is %i\n", self);
@@ -260,14 +284,13 @@ void* main_loop_acquire(void* args){
 		/* Get playback data from the client lib */
 		// int error = (*((const struct TS3Functions *)args)).acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
 		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
-		
 
 		//  int error = 0;
 		// printf("error is %i\n", error);
 		if(error == ERROR_ok) {
 			// printf("Some audio playback available\n");
 
-			// for (int i = 0; i < playbackBufferSize; i++){
+			// for (int i = 0; i < 10; i++){
 			// 	printf("%i,", playbackBuffer[i]);
 			// }
 			// printf("\n");	
@@ -275,8 +298,27 @@ void* main_loop_acquire(void* args){
 	    
 			
 
-			// if (playbackBuffer[0] && playbackBuffer[1])
-				// send_voice(playbackBuffer, playbackBufferSize, 1);
+			// if (playbackBuffer[0] && playbackBuffer[1] ) //||
+				// playbackBuffer[2] || playbackBuffer[3] || 
+				// playbackBuffer[4] || playbackBuffer[5] 
+			
+			// )
+			int discard = 1;
+			int silence = 0;
+			for (int i = 0; i < playbackBufferSize; i++){
+				// if (playbackBuffer[i] == 0)
+				// 	silence += 1;
+				// if (silence > 200){
+				if (playbackBuffer[i] != 0){
+					discard = 0;
+					break;
+				}
+			}
+			if (discard){
+				printf("discarding playbackBuffer\n");
+			} else {
+				send_voice(playbackBuffer, playbackBufferSize, 1);
+			}
 				// memset(playbackBuffer, 0, playbackBufferSize);
 			/*
 			// if (playbackBuffer != NULL){
@@ -1193,7 +1235,7 @@ void ts3plugin_onSoundDeviceListChangedEvent(const char* modeID, int playOrCap) 
 
 void ts3plugin_onEditPlaybackVoiceDataEvent(uint64 serverConnectionHandlerID, anyID clientID, short* samples, int sampleCount, int channels) {
 	// printf("we got voice! %i samples\n", sampleCount);
-	send_voice(samples, sampleCount, channels);
+	// send_voice(samples, sampleCount, channels);
 
 	// for (int i = 0; i < sampleCount; i++){
 	// 	printf("%i,", samples[i]);
@@ -1250,7 +1292,7 @@ void ts3plugin_onEditMixedPlaybackVoiceDataEvent(uint64 serverConnectionHandlerI
 }
 
 void ts3plugin_onEditCapturedVoiceDataEvent(uint64 serverConnectionHandlerID, short* samples, int sampleCount, int channels, int* edited) {
-	printf("something something ts3plugin_onEditCapturedVoiceDataEvent\n");
+	// printf("something something ts3plugin_onEditCapturedVoiceDataEvent\n");
 }
 
 void ts3plugin_onCustom3dRolloffCalculationClientEvent(uint64 serverConnectionHandlerID, anyID clientID, float distance, float* volume) {

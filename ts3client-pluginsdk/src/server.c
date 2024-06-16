@@ -124,20 +124,18 @@ void apply_gain(short* samples, size_t num_samples, double gain) {
 int send_voice(short* samples, int sample_counter, int channels){
 
     //TODO bugs:
-    // 1. non arriva audio (solo array di 0)
     // 2. e' capitato che arrivasse dell'audio, ma quello che e' stato spedito con udp non e' stato ricevuto correttamente (es. 30 secondi di audio sono diventati 3 secondi di rumore indistinto)
     // nota: potrebbe essere a causa di sleep e print che hanno rallentato troppo l'esecuzione e non hanno permesso l'invio corretto dei dati
-    // 3. controllare se funziona conversione con libreria soxr
 
 
     // IP address and port
-    const char* ip_address = "192.168.1.6";
-    int port = 6000;
+    const char* ip_address = "192.168.1.80"; // "192.168.1.80"; 
+    int port = 7000; //6000
 
-    float fsamples[sample_counter];
-    for (int i = 0; i < sample_counter; i++){
-        fsamples[i] = (float)samples[i];
-    }
+    // float fsamples[sample_counter];
+    // for (int i = 0; i < sample_counter; i++){
+    //     fsamples[i] = (float)samples[i];
+    // }
 
     // Initialize sockaddr_in struct
     struct sockaddr_in test_client_addr;
@@ -212,19 +210,18 @@ int send_voice(short* samples, int sample_counter, int channels){
     // }
     // printf("\n"); 
     
-    // printf("total size to send: %i expected send: %i\n", (*odone), ((*odone))/UDP_SIZE);
+    // printf("total size to send: %i expected send: %i\n", (odone), ((odone))/UDP_SIZE);
 
     // printf("converting to uint8_t\n");
     if (error)
         printf("there was an error during downsampling\n");
-
+    
     if (odone == 0){
         printf("downsample: odone is 0\n");
         return 1;
     }
 
     uint8_t data[odone];
-    // uint8_t data[obuf_size]; //TODO uncomment
     // uint8_t data[sample_counter]; 
     
     convert_short_to_uint8(downsampled, odone, data);
@@ -236,17 +233,16 @@ int send_voice(short* samples, int sample_counter, int channels){
 
     int sent = 0;
     int mycounter = 1;
-    while (sent < obuf_size){ //(*odone)*2){
-        struct timeval tv1, tv2;
-        gettimeofday(&tv1, NULL);
-        long long nanoseconds1 = ((long long)tv1.tv_sec * 1000000LL + (long long)tv1.tv_usec)*1000;
+    while (sent < odone){ //(*odone)*2){
+        
+        
 
         int available = odone - sent > UDP_SIZE ? UDP_SIZE : odone - sent;
         // int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
-        uint8_t tmp[available];
+        uint8_t tmp[available+1];
+        tmp[0] = 0;
         // memcpy(tmp, &(data[sent]), available);
-        memcpy(tmp, &(data[sent]), available);
-        
+        memcpy(&(tmp[1]), &(data[sent]), available); 
         // printf("tmp[i]: ");
         // for (int i = 0; i < available; i++){
         //     printf("%i,",tmp[i]);
@@ -267,7 +263,9 @@ int send_voice(short* samples, int sample_counter, int channels){
             return 1;
         }
 
-
+        // struct timeval tv1, tv2;
+        // gettimeofday(&tv1, NULL);
+        // long long nanoseconds1 = ((long long)tv1.tv_sec * 1000000LL + (long long)tv1.tv_usec)*1000;
 
         // printf("trying to reset tmp...\n");
         // memset(tmp, 0, UDP_SIZE);
@@ -275,24 +273,26 @@ int send_voice(short* samples, int sample_counter, int channels){
 
         sent += available;
 
-        gettimeofday(&tv2, NULL);
-        long long nanoseconds2 = ((long long)tv2.tv_sec * 1000000LL + (long long)tv2.tv_usec)*1000;
+        printf("data sent: %i total: %i\n", sent, obuf_size);
 
-        struct timespec myts;
-        myts.tv_sec=0;
-        myts.tv_nsec = UDP_SIZE*(10e9)/8000 - (nanoseconds2 - nanoseconds1);
+        // gettimeofday(&tv2, NULL);
+        // long long nanoseconds2 = ((long long)tv2.tv_sec * 1000000LL + (long long)tv2.tv_usec)*1000;
+
+        // struct timespec myts;
+        // myts.tv_sec=0;
+        // myts.tv_nsec = available*(10e9)/8000; // - (nanoseconds2 - nanoseconds1);
         // nanosleep(&myts, &myts);
     }
 
     // printf("I'm out of for, data sent\n");
 
-    // soxr_delete(resampler); //TODO 
+    // soxr_delete(resampler);
 
 
     return 0;
 }
 
-int receive_data(char** data, size_t * len){
+int receive_data(uint8_t** data, size_t * len){
     struct timespec read_timeout;
     read_timeout.tv_sec=0;
     read_timeout.tv_nsec = 10; //0.1 millisec
@@ -302,7 +302,7 @@ int receive_data(char** data, size_t * len){
     ssize_t recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
             (struct sockaddr*)&client_addr, &client_struct_length);
     if (recvBytes <= 0){
-        // printf("Couldn't receive or no data\n");
+        // printf("DEBUG Couldn't receive or no data\n");
         // nanosleep(&myts, &myts);
         return -1;
     } else {
@@ -310,23 +310,23 @@ int receive_data(char** data, size_t * len){
     }
     *len = recvBytes-1;
     client_message[recvBytes] = '\0';
-    *data = malloc(sizeof(char)*recvBytes);
-    memcpy(*data, &client_message[1], recvBytes-1);
-    printf("DEBUG i have received the following %i bytes: ", recvBytes);
-    for (int i=0; i < recvBytes; i++){
-        printf("%i,", client_message[i]);
-    }
-    printf("\n");
-    printf("DEBUG i have copied data and now buffer is: ");
-    for (int i=0; i < recvBytes; i++){
-        printf("%i,", (*data)[i]);
-    }
-    printf("\n");
+    *data = malloc(sizeof(uint8_t)*recvBytes);
+    memcpy(*data, &(client_message[1]), recvBytes-1);
+    // printf("DEBUG i have received the following %i bytes: \n", recvBytes);
+    // for (int i=0; i < recvBytes; i++){
+    //     printf("%i,", client_message[i]);
+    // }
+    // printf("\n");
+    // printf("DEBUG i have copied data and now buffer is: ");
+    // for (int i=0; i < recvBytes; i++){
+    //     printf("%i,", (*data)[i]);
+    // }
+    // printf("\n");
 
-    if (data == NULL)
-        printf("data: aw shit here we go again\n");
-    else
-        printf("data: ok\n");
+    // if (data == NULL)
+    //     printf("data: aw shit here we go again\n");
+    // else
+    //     printf("data: ok\n");
 
     return client_message[0];
 }

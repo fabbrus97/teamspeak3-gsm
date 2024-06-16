@@ -23,7 +23,7 @@
 
 #define ISIZE 48000
 #define OSIZE 8000
-#define UDP_LISTEN_PORT 7000
+#define UDP_LISTEN_PORT 8000
 #define AUDIO 0
 #define SMS 1
 //TODO definisci cose
@@ -39,7 +39,7 @@ int send_voice(short* samples, int sample_counter, int channels);
 int observe_voice(void* callback, unsigned char* data);
 int start_udp_socket();
 void receive_and_play_voice(void*  args);
-int receive_data(char** data, size_t* len);
+int receive_data(uint8_t** data, size_t* len);
 
 
 //in voice_buffer we write the voice data we receive from the coap server on the arduino
