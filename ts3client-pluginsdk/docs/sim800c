@@ -2,3 +2,5 @@ red: 5v
 black: gnd
 brown: tx
 orange: rx
+
+uart on esp32: 2 (rx/tx are on gpio pin 16/17)

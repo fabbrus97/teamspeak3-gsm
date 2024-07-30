@@ -1,6 +1,6 @@
 #include "server.h"
 #include "ts3_functions.h"
-#define UDP_SIZE 60
+#define UDP_SIZE 512
 
 
 // char* server_address = "127.0.0.1";
