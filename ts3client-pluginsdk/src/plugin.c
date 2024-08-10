@@ -95,7 +95,7 @@ const char* ts3plugin_name() {
 short audio_buffer_to_ds[BUFFER_SIZE];
 int data_in_buffer = 0;
 
-#define audio_buffer_size 65536
+#define audio_buffer_size 6144
 int audio_buffer_pos = 0, audio_buffer_played=0;
 short audio_buffer[audio_buffer_size];
 
@@ -179,58 +179,18 @@ void* main_loop_play(void* args){
 	myts.tv_nsec = bytes2play*1000000000/8000;
 	for(;;){
 		
-		sem_wait(&c_pb_sem);
-		// printf("waiting for some audio to be written...\n");
-		while (audio_buffer_pos >= audio_buffer_played && (audio_buffer_played + 2048) > audio_buffer_pos ){
-		// while (audio_buffer_pos >= audio_buffer_played && (audio_buffer_played + bytes2play*8) > audio_buffer_pos ){
-			// printf("cannot play %i to %i, audio_buffer_pos stuck to %i\n", audio_buffer_played, audio_buffer_played + bytes2play, audio_buffer_pos);
-			sem_post(&c_pb_sem);
-			usleep(200);
-		}
-
-
-
-		
-		// printf("[SEM_P] I need to play audio\n");
-
-		// printf("\n");
-		// printf("CONVERSION OK 💥💥💥\n");
-		//TODO prova a commentare comando sopra per convertire, e manda audio a 48khz S16LE
-		//NOTA S16LE richiede comunque una conversione (perche' da udp ricevi un byte alla volta, 
-		// devi leggerne due consecutivi e accorparli)
-		// (*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
-		printf("[P_INFO] Playing %i - %i\n", audio_buffer_played, audio_buffer_played+bytes2play);
-		ts3Functions.processCustomCaptureData("ts3callbotplayback", &(audio_buffer[audio_buffer_played]), bytes2play);
-		// nanosleep(&myts, &myts);
-		// memset(&(audio_buffer[audio_buffer_played]), 0, bytes2play);
-		sem_wait(&c_pb_sem);
-		audio_buffer_played = (audio_buffer_played + bytes2play) % audio_buffer_size;
-		sem_post(&c_pb_sem);
-
-		printf("[P_INFO] New audio position is %i\n", audio_buffer_played);
-
-		
-		
-		// 
-		// printf("[SEM_V] Audio played\n");
-
-		// usleep((bytes2play*1000000)/48000);
-
-	
-
-
-
-			
 		// free(mybuffer);
 
 		/******** acquire custom playback ************
 		 * see https://teamspeakdocs.github.io/PluginAPI/client_html/ar01s13s05.html
 		
-
+		 */
 		// printf("**** acquire custom playback ***\n");
-		size_t playbackBufferSize = 1024;
+		size_t playbackBufferSize = 512*8;
 		short playbackBuffer[playbackBufferSize];
+		// printf("[DEBUG] ACQUIRING VOICE\n");
 		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
+		
 		// int error = 0;
 		// printf("error is %i\n", error);
 		if(error == ERROR_ok) {
@@ -250,6 +210,7 @@ void* main_loop_play(void* args){
 				if (flag != 0){
 					printf("i should send voice\n");
 					send_voice(&playbackBuffer, playbackBufferSize, 1); //TODO check se non sia 2
+					
 				}
 				// else
 					// printf("but that was a lie!\n");
@@ -262,7 +223,63 @@ void* main_loop_play(void* args){
 		} else {
 			// printf("Failed to get playback data\n");  // Error occured *
 		}
+		/**/
+
+		// usleep((playbackBufferSize*1000000)/48000);
+
+		/********************** getting audio to be written and sent by other thread
+		 * ****************/
+
+		// sem_wait(&c_pb_sem);
+		/*
+		// printf("waiting for some audio to be written...\n");
+		while (audio_buffer_pos >= audio_buffer_played && (audio_buffer_played + 2048) > audio_buffer_pos ){
+		// while (audio_buffer_pos >= audio_buffer_played && (audio_buffer_played + bytes2play*8) > audio_buffer_pos ){
+			// printf("cannot play %i to %i, audio_buffer_pos stuck to %i\n", audio_buffer_played, audio_buffer_played + bytes2play, audio_buffer_pos);
+			sem_post(&c_pb_sem);
+			usleep(200);
+		}
 		*/
+
+
+
+		if ( (audio_buffer_played + bytes2play*2)%audio_buffer_size <= audio_buffer_pos || audio_buffer_pos <= audio_buffer_played){
+		
+			// printf("[SEM_P] I need to play audio\n");
+
+			// printf("\n");
+			// printf("CONVERSION OK 💥💥💥\n");
+			//TODO prova a commentare comando sopra per convertire, e manda audio a 48khz S16LE
+			//NOTA S16LE richiede comunque una conversione (perche' da udp ricevi un byte alla volta, 
+			// devi leggerne due consecutivi e accorparli)
+			// (*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
+			printf("[P_INFO] Playing %i - %i\n", audio_buffer_played, audio_buffer_played+bytes2play);
+			ts3Functions.processCustomCaptureData("ts3callbotplayback", &(audio_buffer[audio_buffer_played]), bytes2play);
+			// nanosleep(&myts, &myts);
+			// memset(&(audio_buffer[audio_buffer_played]), 0, bytes2play);
+			sem_wait(&c_pb_sem);
+			audio_buffer_played = (audio_buffer_played + bytes2play) % audio_buffer_size;
+			sem_post(&c_pb_sem);
+
+			printf("[P_INFO] New audio position is %i\n", audio_buffer_played);
+			// usleep((bytes2play*1000000)/8000);
+		} else {
+			sem_post(&c_pb_sem);
+			printf("[DEBUG] skip playing because buffer not ready\n");
+		}
+		
+		
+		// 
+		// printf("[SEM_V] Audio played\n");
+
+		// usleep((bytes2play*1000000)/48000);
+
+		// usleep((bytes2play*1000000)/8000);
+
+		usleep((bytes2play*1000000)/8000);
+
+
+		
 	}
 
 
@@ -292,17 +309,25 @@ void* main_loop_acquire(void* args){
 		// self = pthread_self();
 		// printf("my thread id is %i\n", self);
 		
-
 		int type = receive_data(&mybuffer, &receivedBytes);
+
+
 
 		switch (type)
 		{
 		case AUDIO:
 			// printf("Waiting for some audio to be played...\n");
-			sem_wait(&c_pb_sem);
-			while (audio_buffer_pos < audio_buffer_played && audio_buffer_pos + bytes2write > audio_buffer_played){
+
+			while (1){
+				sem_wait(&c_pb_sem);
+				if ((audio_buffer_pos + receivedBytes < audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
+					// printf("[DEBUG] I'm ready to write to buffer!\n");
+					sem_post(&c_pb_sem);
+					break;
+				}
 				sem_post(&c_pb_sem);
-				usleep(1);
+				// printf("[DEBUG] cannot write to buffer because not ready\n");
+				// usleep(200);
 			}
 			
 
@@ -333,8 +358,6 @@ void* main_loop_acquire(void* args){
 			sem_post(&c_pb_sem);
 			// printf("[SEM_V] Data written\n");
 
-
-
 			break;
 
 		default:
@@ -347,74 +370,7 @@ void* main_loop_acquire(void* args){
 
 		/* Get playback data from the client lib */
 		// int error = (*((const struct TS3Functions *)args)).acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
-		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
-
-		//  int error = 0;
-		// printf("error is %i\n", error);
-		if(error == ERROR_ok) {
-			// printf("Some audio playback available\n");
-
-			// for (int i = 0; i < 10; i++){
-			// 	printf("%i,", playbackBuffer[i]);
-			// }
-			// printf("\n");	
-			
-	    
-			
-
-			// if (playbackBuffer[0] && playbackBuffer[1] ) //||
-				// playbackBuffer[2] || playbackBuffer[3] || 
-				// playbackBuffer[4] || playbackBuffer[5] 
-			
-			// )
-			int discard = 1;
-			int silence = 0;
-			for (int i = 0; i < playbackBufferSize; i++){
-				// if (playbackBuffer[i] == 0)
-				// 	silence += 1;
-				// if (silence > 200){
-				if (playbackBuffer[i] != 0){
-					discard = 0;
-					break;
-				}
-			}
-			if (discard){
-				printf("discarding playbackBuffer\n");
-			} else {
-				send_voice(playbackBuffer, playbackBufferSize, 1);
-			}
-				// memset(playbackBuffer, 0, playbackBufferSize);
-			/*
-			// if (playbackBuffer != NULL){
-				playbackBuffer[0] = 0;
-				// playbackBuffer[1] = 0;
-				// printf("checking playbackbuffer: %p\n", playbackBuffer);
-				int flag=0;
-				for (int i=0; i < 10; i++){
-					// printf("checking byte %i\n", i);
-					flag += playbackBuffer[i];
-				}
-				
-				printf("\n");
-				// Playback data available, send playbackBuffer to your custom device
-				if (flag != 0){
-					printf("i should send voice\n");
-					//send_voice(&playbackBuffer, playbackBufferSize, 1); //TODO check se non sia 2
-				}
-				else
-					printf("but that was a lie!\n");
-			// }*/
-
-		// } else if(error == ERROR_sound_no_data) {
-		// 	// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
-		// 	// pause playback for performance optimisation or send a buffer of zeros.
-		// 	printf("No audio playback right now\n");
-		// 	nanosleep(&p, &myts);
-		// } else {
-		// 	printf("Failed to get playback data\n");  // Error occured *
-		// }
-		} else if (error != ERROR_sound_no_data)
-			printf("Failed to get playback data\n");  // Error occured *
+		 
 
 		// printf("loop ended ok\n");
 

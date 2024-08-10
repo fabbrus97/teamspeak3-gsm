@@ -240,7 +240,7 @@ int send_voice(short* samples, int sample_counter, int channels){
         int available = odone - sent > UDP_SIZE ? UDP_SIZE : odone - sent;
         // int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
         uint8_t tmp[available+1];
-        tmp[0] = 0;
+        tmp[0] = 0; 
         // memcpy(tmp, &(data[sent]), available);
         memcpy(&(tmp[1]), &(data[sent]), available); 
         // printf("tmp[i]: ");
