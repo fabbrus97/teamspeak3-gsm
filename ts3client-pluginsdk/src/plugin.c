@@ -172,7 +172,7 @@ void* main_loop_play(void* args){
 	printf(" ========== DEBUG THREAD STARTED ========== ");
 	// uint8_t* mybuffer = NULL;
 	uint8_t* mybuffer = NULL;
-	int bytes2play = 512;
+	const int bytes2play = 512;
 
 	struct timespec myts; 
 	myts.tv_sec=0;
@@ -186,7 +186,7 @@ void* main_loop_play(void* args){
 		
 		 */
 		// printf("**** acquire custom playback ***\n");
-		size_t playbackBufferSize = 512*8;
+		size_t playbackBufferSize = 512*6; 
 		short playbackBuffer[playbackBufferSize];
 		// printf("[DEBUG] ACQUIRING VOICE\n");
 		int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
@@ -199,11 +199,11 @@ void* main_loop_play(void* args){
 			// if (playbackBuffer != NULL){
 				playbackBuffer[0] = 0x00;
 				// printf("checking playbackbuffer: %p\n", playbackBuffer);
-				int flag=0;
-				for (int i=0; i < 10; i++){
-					// printf("checking byte %i\n", i);
-					flag += playbackBuffer[i];
-				}
+				int flag=1;
+				// for (int i=0; i < 10; i++){
+				// 	// printf("checking byte %i\n", i);
+				// 	flag += playbackBuffer[i];
+				// }
 				
 				// printf("\n");
 				// Playback data available, send playbackBuffer to your custom device
@@ -243,7 +243,7 @@ void* main_loop_play(void* args){
 
 
 
-		if ( (audio_buffer_played + bytes2play*2)%audio_buffer_size <= audio_buffer_pos || audio_buffer_pos <= audio_buffer_played){
+		if ( (audio_buffer_played + bytes2play)%audio_buffer_size < audio_buffer_pos || audio_buffer_pos < audio_buffer_played){
 		
 			// printf("[SEM_P] I need to play audio\n");
 
@@ -265,18 +265,17 @@ void* main_loop_play(void* args){
 			// usleep((bytes2play*1000000)/8000);
 		} else {
 			sem_post(&c_pb_sem);
-			printf("[DEBUG] skip playing because buffer not ready\n");
+			printf("[DEBUG][SKIP PLAY] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
 		}
 		
 		
 		// 
 		// printf("[SEM_V] Audio played\n");
 
-		// usleep((bytes2play*1000000)/48000);
+		usleep((bytes2play*1000000)/48000); //~10666,66 periodico
 
-		// usleep((bytes2play*1000000)/8000);
+		// usleep((bytes2play*1000000)/8000); //64000
 
-		usleep((bytes2play*1000000)/8000);
 
 
 		
@@ -320,13 +319,15 @@ void* main_loop_acquire(void* args){
 
 			while (1){
 				sem_wait(&c_pb_sem);
-				if ((audio_buffer_pos + receivedBytes < audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
+				if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
 					// printf("[DEBUG] I'm ready to write to buffer!\n");
 					sem_post(&c_pb_sem);
 					break;
 				}
 				sem_post(&c_pb_sem);
 				// printf("[DEBUG] cannot write to buffer because not ready\n");
+				printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
+
 				// usleep(200);
 			}
 			
