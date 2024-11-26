@@ -13,3 +13,4 @@ sim800c PWX: esp32 ground (next to 3V)
 sim800c rx: esp32 tx2 
 sim800c tx: esp32 rx2 
 sim800c vttl: esp32 3V
+sim800c mic+: esp32 26
