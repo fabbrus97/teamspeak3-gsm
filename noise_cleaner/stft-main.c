@@ -1,18 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "kiss_fft.h"
+#include <kissfft/kiss_fft.h>
+
+#define MAX_INPUT 102400
 
 #define FRAME_SIZE 1024 // Size of each frame
 #define HOP_SIZE 512    // Overlap (e.g., 50%)
 #define SAMPLE_RATE 44100
 
+
+
 void apply_hamming_window(float *frame, int size) {
-    for (int i = 0; i < size; i++) {
+/*    for (int i = 0; i < size; i++) {
         frame[i] *= 0.54 - 0.46 * cos(2 * M_PI * i / (size - 1));
-    }
+    }*/
 }
 
+/*
 void compute_stft(float *input_signal, int signal_length, int frame_size, int hop_size) {
     // Allocate memory for the FFT
     kiss_fft_cfg cfg = kiss_fft_alloc(frame_size, 0, NULL, NULL);
@@ -60,22 +65,47 @@ void compute_stft(float *input_signal, int signal_length, int frame_size, int ho
     free(fft_output);
     free(cfg);
 }
+*/
 
-int main() {
-    // Example signal: Sine wave + noise
-    int signal_length = SAMPLE_RATE * 1; // 1 second of audio
-    float *signal = (float *)malloc(signal_length * sizeof(float));
-
-    // Generate a test signal (sine wave at 440 Hz with noise)
-    for (int i = 0; i < signal_length; i++) {
-        signal[i] = 0.5 * sin(2 * M_PI * 440 * i / SAMPLE_RATE) + 0.05 * ((float)rand() / RAND_MAX - 0.5);
+int main(int argc, char** argv) {
+    /* algorithm:
+    1. read input and compute length
+    2. s     = stft(input)
+    3. ss    = abs(s)
+    (repeat per noise)
+    4. angle = angle(s)
+    5. b     = exp(1.0j * angle)
+    6. m     = mean(noise_ss)
+    7. sa    = ss - m.reshape((m.shape[0],1))
+    8. sa0   = sa * b
+    9. y     = istft(sa0)
+    10. write y
+    */
+    
+    if (argc != 4){
+        printf("Usage: %s input input_noise output\n", argv[0]);
+        exit(1);
     }
 
+    FILE* input = fopen(argv[1], "rb");
+    FILE* noise = fopen(argv[2], "rb");
+
+    short input_data[MAX_INPUT];
+    short noise_data[MAX_INPUT];
+    size_t input_length = 0, noise_length = 0;
+    int _r = 0;
+
+    while(_r = fread(&(input_data[input_length]), sizeof(short), 512, input)) input_length += _r;
+    while(_r = fread(&(noise_data[noise_length]), sizeof(short), 512, noise)) noise_length += _r;
+
+    printf("input length is %li, noise length is %li\n", input_length/512, noise_length/512);
+    return 0;
+
     // Compute STFT
-    compute_stft(signal, signal_length, FRAME_SIZE, HOP_SIZE);
+    // compute_stft(signal, signal_length, FRAME_SIZE, HOP_SIZE);
 
     // Clean up
-    free(signal);
+    // free(signal);
     return 0;
 }
 

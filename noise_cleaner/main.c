@@ -16,7 +16,7 @@ float computeNoiseFloor(float *buffer, int size) {
 }
 
 // #if 0
-void spectralSubtraction(float *input, float *output, int size, float *noiseSpectrum) {
+void spectralSubtraction(int16_t *input, int16_t *output, int size, int16_t *noiseSpectrum) {
     kiss_fft_cfg cfg = kiss_fft_alloc(size, 0, NULL, NULL);
     kiss_fft_cpx in[size], out[size];
 
@@ -51,7 +51,8 @@ int main(){
     const char *filename = "noise.pcm"; 
     FILE *file = fopen(filename, "rb");
 
-    uint8_t noise[1024*95];
+    uint8_t noise_u8[1024*95];
+    int16_t noise_16[1024*95];
 
     unsigned char buffer[CHUNK_SIZE];
     size_t bytesRead=0, bufferOffset=0;
@@ -62,9 +63,12 @@ int main(){
             printf("%02X ", buffer[i]); // Example: Print bytes as hexadecimal
         }
         printf("\n");
-        memcpy(noise + bufferOffset, buffer, bytesRead);
+        memcpy(noise_u8 + bufferOffset, buffer, bytesRead);
         bufferOffset += bytesRead;
     }
+
+    for(int i=0; i < sizeof(noise_u8); i++)
+        noise_16[i] = (((int16_t)noise_u8[i] - 127) << 8);
 
     // float noise_val = computeNoiseFloor((float *)noise, sizeof(noise));
 
@@ -75,7 +79,8 @@ int main(){
     filename = "audio2clean.pcm"; 
     file = fopen(filename, "rb");
 
-    uint8_t audio2clean[1024*95];
+    uint8_t audio2clean_u8[1024*95];
+    int16_t audio2clean_16[1024*95];
 
     bytesRead=0, bufferOffset=0;
 
@@ -85,13 +90,17 @@ int main(){
             printf("%02X ", buffer[i]); // Example: Print bytes as hexadecimal
         }
         printf("\n");
-        memcpy(audio2clean + bufferOffset, buffer, bytesRead);
+        memcpy(audio2clean_u8 + bufferOffset, buffer, bytesRead);
         bufferOffset += bytesRead;
     }
 
-    float cleaned_output[1024*95];
+    for(int i=0; i < sizeof(audio2clean_u8); i++)
+        audio2clean_16[i] = (((int16_t)audio2clean_u8[i] - 127) << 8);
+
+
+    int16_t cleaned_output[1024*95];
     printf("trying spectral subtraction\n");
-    spectralSubtraction(audio2clean, cleaned_output, 73000, noise);
+    spectralSubtraction(audio2clean_16, cleaned_output, 73000, noise_16);
     printf("spectral subtraction done\n");
 
 
@@ -101,7 +110,6 @@ int main(){
     file = fopen(filename, "wb");
     fwrite((uint8_t*)cleaned_output, 1, 73000, file);
 
-    //TODO ricompila libreria in int16_t
     //TODO converti tutti i uint8_t in int16_t 
 
     return 0;
