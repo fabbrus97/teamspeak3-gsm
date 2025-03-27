@@ -4,8 +4,8 @@
 
 
 // char* server_address = "127.0.0.1";
-char* server_address = "192.168.1.20";
-char* server_port = "5683";
+// char* server_cmd_address = "192.168.1.20";
+// char* server_cmd_port = "5683";
 
 static unsigned int token_obs = 0;
 sem_t sem_voice_buffer;
@@ -84,6 +84,7 @@ void convert_short_to_uint8_old(short * samples, int count, uint8_t* out){
  }
 }
 
+/*
 void downsample_soxr(short* ibuffer, short* obuffer, int ilen, int olen) {
     // Set input and output rates
     soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
@@ -112,6 +113,7 @@ void downsample_soxr(short* ibuffer, short* obuffer, int ilen, int olen) {
     // Clean up
     soxr_delete(resampler);
 }
+*/
 
 // Function to apply gain reduction to audio samples
 void apply_gain(short* samples, size_t num_samples, double gain) {
@@ -120,6 +122,7 @@ void apply_gain(short* samples, size_t num_samples, double gain) {
         samples[i] = (short)(samples[i] * gain);
     }
 }
+
 
 int send_voice(short* samples, int sample_counter, int channels){
 
@@ -291,6 +294,21 @@ int send_voice(short* samples, int sample_counter, int channels){
 
     return 0;
 }
+
+void send_command(char* command, size_t len){
+    struct sockaddr_in test_client_addr;
+    memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
+    test_client_addr.sin_family = AF_INET; // IPv4
+    test_client_addr.sin_port = htons(server_cmd_port); // Port in network byte order
+    inet_pton(AF_INET, server_cmd_address, &test_client_addr.sin_addr); // Convert IP address to binary
+
+    if (sendto(socket_desc, command, len, 0,
+        (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0){
+        fprintf(stderr, "Error in sendto()\n");
+        return 1;
+    }
+}
+
 
 int receive_data(uint8_t** data, size_t * len){
     struct timespec read_timeout;

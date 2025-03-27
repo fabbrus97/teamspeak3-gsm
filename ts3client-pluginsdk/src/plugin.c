@@ -44,8 +44,10 @@
 const char* devID = "ts3callbotplayback";
 const char* devDisplayName = "ts3_callbot_playback";
 sem_t c_pb_sem; 
+char* channel_to_connect;
 
 static char* pluginID = NULL;
+static uint64 currentServerConnectionHandlerID;
 
 static struct TS3Functions ts3Functions;
 
@@ -139,6 +141,9 @@ int ts3plugin_init() {
     /* Your plugin init code here */
     printf("PLUGIN: init\n");
 
+	//load variables
+	load_variables();
+
 	// 1. create audio playback device
 	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  //TODO check se la seconda frequenza dev'essere 8000 o 48000
 		printf("Error registering playback device\n");
@@ -160,6 +165,51 @@ int ts3plugin_init() {
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
 	 * the plugin again, avoiding the show another dialog by the client telling the user the plugin failed to load.
 	 * For normal case, if a plugin really failed to load because of an error, the correct return value is 1. */
+}
+
+void load_variables(){
+	FILE* var_file = fopen("~/teamspeak-gsm", "r");
+	size_t ret; 
+	unsigned char buffer[1024];
+
+	ret = fread(buffer, sizeof(*buffer), ARRAY_SIZE(buffer), var_file);
+	if (ret != ARRAY_SIZE(buffer)) {
+		fprintf(stderr, "fread() failed: %zu\n", ret);
+		exit(EXIT_FAILURE);
+	}
+	fclose(var_file);
+
+	unsigned char name[64];
+	unsigned char value[64];
+	int parse_name = 1;
+	int tmp_i = 0;
+	int i=0;
+	do {
+		char current = buffer[i];
+		if (i=="=") {
+			parse_name == 0;
+			name[tmp_i] = "\0";
+			tmp_i = 0;
+		}
+		else if (i=="\n") {
+			parse_name == 1;
+			tmp_i=0;
+			if (strcmp(name, "arduino_ip") == 0){
+				server_cmd_address = value;
+			}
+			if (strcmp(name, "arduino_port") == 0){
+				server_cmd_port = value;
+			}
+		}
+		else if (parse_name){
+			name[tmp_i++] = buffer[i];
+		} else if (!parse_name){
+			value[tmp_i++] = buffer[i];
+		}
+		i++;
+	} while (buffer[i] != "\0");
+
+
 }
 
 //play data acquired from network (esp32) on ts client
@@ -360,13 +410,28 @@ void* main_loop_acquire(void* args){
 			// printf("[SEM_V] Data written\n");
 
 			break;
-
+		case CMD_OUTPUT:
+			anyID myID;
+			uint64 myChannelID;
+			if(ts3Functions.getClientID(currentServerConnectionHandlerID, &myID) != ERROR_ok) {
+				ts3Functions.logMessage("Error querying client ID", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
+				break;
+			}
+			if(ts3Functions.getChannelOfClient(currentServerConnectionHandlerID, myID, &myChannelID) != ERROR_ok) {
+				ts3Functions.logMessage("Error querying channel ID", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
+				break;
+			}
+			if(ts3Functions.requestSendChannelTextMsg(currentServerConnectionHandlerID, mybuffer, myChannelID, NULL) != ERROR_ok) {
+				ts3Functions.logMessage("Error requesting send text message", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
+			}
+		
+			break;
 		default:
 			// printf("UNKNOWN DATA!!!!\n");
 
 			break;
 		}
-		// free(&mybuffer); /TODO memory leak!
+		// free(&mybuffer); //TODO memory leak!
 
 
 		/* Get playback data from the client lib */
@@ -773,6 +838,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 
 /* Client changed current server connection handler */
 void ts3plugin_currentServerConnectionChanged(uint64 serverConnectionHandlerID) {
+	currentServerConnectionHandlerID = serverConnectionHandlerID;
     printf("PLUGIN: currentServerConnectionChanged %llu (%llu)\n", (long long unsigned int)serverConnectionHandlerID, (long long unsigned int)ts3Functions.getCurrentServerConnectionHandlerID());
 }
 
@@ -1190,6 +1256,17 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 	if(ffIgnored) {
 		return 0; /* Client will ignore the message anyways, so return value here doesn't matter */
 	}
+
+	//check if user is enabled
+
+	if (!strncmp(message, "/tsgsm", 6)){
+		return 1;
+	}
+
+	char command[(sizeof(message)-7)+1];
+	strcpy(command, message[7]);
+
+
 
 #if 0
 	{
