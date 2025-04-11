@@ -1,0 +1,33 @@
+#ifndef MAIN_H
+#define MAIN_H
+
+#include "TSutils.hpp"
+#include "SIMutils.hpp"
+#include <WiFi.h>
+#include <WiFiUdp.h>
+//#include <SoftwareSerial.h>
+// #include <pwm.h>
+
+#define AUDIOPIN_OUT 26
+#define AUDIOPIN_IN 27 //TODO
+#define FREQUENCY 24000
+#define GPIO 25
+
+#define RXD2 16
+#define TXD2 17
+
+char* ssid = ""; //insert your ssid;
+const char* password =  ""; // insert your pwd;
+
+IPAddress staticIP(192, 168, 1, 80); // Set your static IP address here
+IPAddress gateway(192, 168, 1, 1);     // Set your gateway IP address here
+IPAddress subnet(255, 255, 255, 0);    // Set your subnet mask here
+
+#define BUFFERLOOPSIZE 1024
+char bufferloop[BUFFERLOOPSIZE];
+char bufferloopcp[BUFFERLOOPSIZE];
+char* buffertaskloop;
+
+char serial_buffer[BUFFERLOOPSIZE];
+
+#endif
