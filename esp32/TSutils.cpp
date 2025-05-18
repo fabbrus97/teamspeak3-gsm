@@ -6,39 +6,52 @@
 #include "TSutils.hpp"
 
 static char packetBuffer[UDP_READ];
-static WiFiUDP udp;
-// IPAddress serverAddress(192, 168, 1, 6); //define server address - tomahawk
-IPAddress serverAddress(192, 168, 1, 19); //define server address - framework
+IPAddress serverAddress(192, 168, 1, 6); //define server address - tomahawk
+//IPAddress serverAddress(192, 168, 1, 19); //define server address - framework
 // IPAddress serverAddress(192, 168, 180, 93);
 uint16_t serverPort = 8000; //define server port
+uint16_t cmdPort = 8001;
+static WiFiUDP udp;
+WiFiServer cmdServer(cmdPort);
+NetworkClient _client;
 
 void TSinit(){
   // Start UDP server on port 7000
   udp.begin(7000);
   Serial.println("UDP server started on port 7000");
+  cmdServer.begin();
 }
 
-int get_data(char* data, int* datalen){
+int get_audio_data(char* data){
   int packetSize = udp.parsePacket();
   if (packetSize) {
     // printf("Received %d bytes from %s, port %d\n", packetSize, udp.remoteIP().toString().c_str(), udp.remotePort());
     
     int len = udp.read(packetBuffer, UDP_READ);
-    if (len > 1) {
+    if (len > 0) {
       //packetBuffer[len] = 0;
       //*data = (char*)malloc(sizeof(char)*len-1);
-      memcpy(data, &(packetBuffer[1]), len-3);
+      memcpy(data, packetBuffer, len-2);
       //data = &(packetBuffer[1]);
       // for (int i=1; i < len; i++){
       //   Serial.print((uint8_t)packetBuffer[i]); Serial.print(",");
       // }
       // Serial.println("");
-      *datalen=len-3;
       //Serial.printf("packetBuffer[0] is %i\n", packetBuffer[0]);
-      return packetBuffer[0];
+      return len-2;
     }
   }
   return -1;
+}
+
+int send_cmd_output(const char* data){
+   if (!_client.connect(serverAddress, cmdPort)) {
+    return -1;
+  }
+
+  _client.print(data);
+
+  _client.stop();
 }
 
 int send_data(int type, const uint8_t* data, int size){
@@ -54,7 +67,7 @@ int send_data(int type, const uint8_t* data, int size){
   //   printf("%i, ", data[i]);
   // }
   // printf("\n");
-  udp.beginPacket(serverAddress, serverPort);
+  udp.beginPacket(serverAddress, serverPort); 
   // size_t written = udp.write(packet, size+1);
   size_t written = udp.write(packet, size);
   // size_t written = udp.write(packet,  sizeof(packet));

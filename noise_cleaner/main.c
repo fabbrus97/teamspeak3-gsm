@@ -110,7 +110,7 @@ int main(){
     file = fopen(filename, "wb");
     fwrite((uint8_t*)cleaned_output, 1, 73000, file);
 
-    //TODO converti tutti i uint8_t in int16_t 
+    
 
     return 0;
 }

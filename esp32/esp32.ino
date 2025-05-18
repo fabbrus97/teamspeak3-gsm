@@ -13,9 +13,19 @@
 
 /*************************************/
 
+TaskHandle_t Task1;
+
 int wolverine_pos = 0, available2play = 0;
+// int call_in_progress=1;
 // buffer for received audio
-int audio_buffer_pos = 0, played_audio_pos = 1024 * 4;
+int audio_buffer_pos = 0, serial_buffer_pos=0, played_audio_pos = 1024 * 4;
+int check_serial = 1;
+int data2copy = 0;
+int bytes2send = 0;
+
+int test_positions[10];
+int test_position_counter;
+
 const int buf_sz = 1024 * 4;
 char audio_buffer[buf_sz];  //orig buf_size = 1024*6
 // buffer for audio to send
@@ -27,13 +37,15 @@ uint8_t audio2send_buffer[audio2send_buffer_sz];
 char byte_buf;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE timerMuxS = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE bufferMuxS = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE new_audioMuxS = portMUX_INITIALIZER_UNLOCKED;
 
 hw_timer_t* timer = NULL;
 
 //FspTimer audio_timer, get_voice_timer; //gv
 
 int did_play = -1;
-int capt_audio = 1;
+int answer_len=0; //to read answer to commands sent to gsm modem
 
 void ARDUINO_ISR_ATTR timer_callback() {
   //get audio to send
@@ -41,20 +53,24 @@ void ARDUINO_ISR_ATTR timer_callback() {
   // if (available2write > 0){
 
   // portENTER_CRITICAL_ISR(&timerMuxS);
-  //TODO if we are in a call
-  if (1)  {
+  //if we are in a call
+  if (call_in_progress)  {
     portENTER_CRITICAL_ISR(&timerMuxS);
-  // if (audio2send_pos_w < audio2send_buffer_sz){
-    if (capt_audio){
+    // if (audio2send_pos_w < audio2send_buffer_sz){
     // if (1){
+      //if (collect_pos < 10){
+      // }
+      
+
       audio2send_buffer[audio2send_pos_w++] = adc1_get_raw(ADC1_CHANNEL_0)/16; //(analogRead(AUDIOPIN_IN));
       audio2send_pos_w %= audio2send_buffer_sz;
-    }
+    
+    // }
     // audio2send_buffer[audio2send_pos_w++] = audio_data[wolverine_pos++]; audio2send_pos_w %= audio2send_buffer_sz;
     portEXIT_CRITICAL_ISR(&timerMuxS);
 
     // wolverine_pos %= sizeof(audio_data);
-    
+
 
 
 
@@ -76,7 +92,9 @@ void ARDUINO_ISR_ATTR timer_callback() {
   // if (audio_buffer_pos > played_audio_pos || (audio_buffer_pos + 512 < played_audio_pos )){
   // printf("[DEBUG][PLAYING] %i/%i\n", played_audio_pos, buf_sz);
   // pwm_out.pulse_perc((((uint8_t)(audio_buffer[played_audio_pos++]))/255.0f) * 100);
+
   portENTER_CRITICAL_ISR(&timerMux);
+
   // if ((audio_buffer_pos > played_audio_pos && (audio_buffer_pos - played_audio_pos > buf_sz/2)) ||
   if ((audio_buffer_pos != played_audio_pos )
       // (played_audio_pos > audio_buffer_pos && (buf_sz - played_audio_pos + audio_buffer_pos > buf_sz/2))
@@ -93,6 +111,7 @@ void ARDUINO_ISR_ATTR timer_callback() {
   } else {
     portEXIT_CRITICAL_ISR(&timerMux);
   }
+
   // Give a semaphore that we can check in the loop
   // xSemaphoreGiveFromISR(timerSemaphore, NULL);
 
@@ -107,6 +126,8 @@ void ARDUINO_ISR_ATTR timer_callback() {
 }
 
 /*************************************/
+
+void taskloop(void * parameter);
 
 void setup() {
 
@@ -183,14 +204,151 @@ void setup() {
   */
 
   // debug - send data to ts server in another thread
-  // xTaskCreatePinnedToCore(
-  //     taskloop, /* Function to implement the task */
-  //     "wolverinesend", /* Name of the task */
-  //     10000,  /* Stack size in words */
-  //     NULL,  /* Task input parameter */
-  //     0,  /* Priority of the task */
-  //     &Task1,  /* Task handle. */
-  //     0); /* Core where the task should run */
+  xTaskCreatePinnedToCore(
+      taskloop, /* Function to implement the task */
+      "getdata", /* Name of the task */
+      10000,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      0,  /* Priority of the task */
+      &Task1,  /* Task handle. */
+      0); /* Core where the task should run */
+}
+
+// char* testoutputcmd = "hello world!\n";
+
+void taskloop(void * parameter){
+  printf("started task loop\n");
+  int read=0;
+  for (;;) {
+    //get, execute cmd
+    read = 0;
+    WiFiClient client = cmdServer.available();
+    int canBreak=0;
+    while (client.connected()) //TODO
+      if (client.available()){
+        printf("GOT CLIENT\n");
+        printf("EXECUTING: ");
+        read = client.read((uint8_t*)bufferloopcmd, BUFFERLOOPSIZE);
+
+        // if (read){
+          if (strncmp(bufferloopcmd, "!STOPTEXT!", 10) == 0){
+            Serial2.write(26);
+          }
+
+          for (int i=0; i<read; i++){
+            printf("%c,", bufferloopcmd[i]);
+            Serial2.write(bufferloopcmd[i]);
+          }
+          // if (bufferloopcmd[read-1] != '\n'){
+          printf("\n");
+          Serial2.write("\n");
+          // }
+          //read answer and send output
+          answer_len = 0;
+          serial_buffer_pos = 0;
+          unsigned long timeout = millis() + 100; // wait up to 'timeout' ms
+
+          while (millis() < timeout || Serial2.available()) {
+            while (Serial2.available()){
+              serial_buffer[serial_buffer_pos++] = Serial2.read();
+              // printf("  **getting char**\n");
+              answer_len++;
+              // refresh timeout
+              timeout = millis() + 100;
+            }
+          }
+          serial_buffer[serial_buffer_pos] = '\0';
+          serial_buffer_pos=0;
+
+          //send answer
+          if (answer_len > 0){
+            printf("OUTPUT OF COMMAND:\n%s\n", serial_buffer);
+            printf("*** END ***\n", serial_buffer);
+            client.write(serial_buffer, answer_len);
+            // send_cmd_output(serial_buffer); //todo check return value
+          } else {
+            printf("NO OUTPUT FOR COMMAND\n");
+          }
+
+          break;
+      // }
+    }
+
+
+
+    /*serial_buffer_pos = 0;
+    // check data from internet
+    int len = 0;
+    portENTER_CRITICAL_ISR(&bufferMuxS);
+    int type = get_audio_data(bufferloop, &len);
+    portEXIT_CRITICAL_ISR(&bufferMuxS);
+    switch (type) { //TODO aggiungi semaforo per new_audio e bufferloop
+      case AUDIO:
+        portENTER_CRITICAL_ISR(&new_audioMuxS);
+        new_audio=1;
+        portEXIT_CRITICAL_ISR(&new_audioMuxS);
+        break;
+      case COMMAND:
+        len += 2;
+        portENTER_CRITICAL_ISR(&bufferMuxS);
+        memcpy(bufferloop, bufferloopcp, len); //BUFFERLOOPSIZE);
+        portEXIT_CRITICAL_ISR(&bufferMuxS);
+        // memcpy(serial_buffer, testoutputcmd, 13);
+        //send command
+
+        printf("cmd len: %i; writing ", len);
+        for (int i=0; i<len; i++){
+          printf("%c", bufferloopcp[i]);
+          Serial2.write(bufferloopcp[i]);
+        }
+        printf("\n");
+        Serial2.write("\n");
+        //read answer
+        while (Serial2.available()) {
+          serial_buffer[serial_buffer_pos++] = Serial2.read();
+          printf("%c.", serial_buffer[serial_buffer_pos-1]);
+          answer_len++;
+          // Serial.write(serial_buffer[serial_buffer_pos - 1]);
+          if (serial_buffer[serial_buffer_pos - 1] == '\n' || serial_buffer[serial_buffer_pos - 1] == '\r') {
+            serial_buffer[serial_buffer_pos] = '\0';
+            printf("\n");
+            // parse_serial(serial_buffer);
+            serial_buffer_pos = 0;  //TODO
+          }
+        }
+
+        //send answer
+        printf("OUTPUT OF COMMAND\n %s\n", serial_buffer);
+        send_cmd_output(serial_buffer); //todo check return value
+
+        break;
+      case -1:  //no packet
+        // Serial.println("No packet received");
+        break;
+      default:
+        Serial.print("unrecognized type ");
+        Serial.println(type);
+        break;
+    }*/
+
+    // check data from modem
+    while (Serial2.available()) {
+      serial_buffer[serial_buffer_pos++] = Serial2.read();
+      Serial.write(serial_buffer[serial_buffer_pos - 1]);
+      if (serial_buffer[serial_buffer_pos - 1] == '\n' || serial_buffer[serial_buffer_pos - 1] == '\r') {
+        serial_buffer[serial_buffer_pos] = '\0';
+        parse_serial(serial_buffer);
+        serial_buffer_pos = 0;  //TODO
+      }
+    }
+
+    while (Serial.available() && check_serial){
+      char c = Serial.read();
+      Serial.print(".");
+      Serial.print(c);
+      Serial2.write(c);
+    }
+  }
 }
 
 void play(int len, char* data) {
@@ -214,63 +372,60 @@ void play(int len, char* data) {
 }
 
 void play_wolverine() {  //FIXME
+  printf("[DEBUG] playing 'wolverine!'\n");
   int time2sleep = 1000000 / 8000;
   for (int i = 0; i < sizeof(audio_data); i++) {
     //printf("%i,", audio_data[i]);
     //analogWrite(AUDIOPIN, audio_data[i]);
     auto t1 = micros();
-    // ledcWrite(0, audio_data[i]); TODO
+    ledcWrite(AUDIOPIN_OUT, audio_data[i]); 
     // pwm_out.pulse_perc((audio_data[i]/255.0f) * 100);
     auto t2 = micros();
     delayMicroseconds(time2sleep - (t2 - t1));
     //delayMicroseconds(125 - (t2-t1));
   }
-  // ledcWrite(0, 0); TODO
+  ledcWrite(AUDIOPIN_OUT, 0); 
   // pwm_out.pulse_perc(0);
   printf("\n");
 }
 
-int check_serial = 1;
-
-int data2copy = 0;
-char serial_buffer[512];
-int serial_buffer_pos = 0;
-
-int bytes2send = 0;
-
-int test_positions[10]; 
-int test_position_counter; 
+int justsent = 0;
 
 void loop() {
 
+
   // if (did_play)
   //   printf("[DEBUG] did_play: %i, pos: %i\n", did_play, played_audio_pos);
-
-  // send audio to ts - TODO only if call in progress
-  if(1){
-
+  // send audio to ts
+  if(call_in_progress){
+    // printf("[DEBUG] call in progress\n");
+    int ts1 = millis();
     int tmp = -1;
+    // printf("[DEBUG] stop capture! audio2send_pos_w %i\n", audio2send_pos_w);
+    // delay(50);
     portENTER_CRITICAL(&timerMuxS);
     tmp = audio2send_pos_w;
-    capt_audio = 0;
+    // capt_audio = 0;
     portEXIT_CRITICAL(&timerMuxS);
-    // printf("tmp: %i\n", audio2send_buffer[tmp]);
-    // test_positions[test_position_counter++] = tmp; 
+    // printf("tmp: %i\n", tmp);
+    // test_positions[test_position_counter++] = tmp;
     int audio2send = audio2send_sent < tmp ? (tmp - audio2send_sent)%max_audio2send : (audio2send_buffer_sz - audio2send_sent + tmp)%max_audio2send;
     // int audio2send = audio2send_sent < audio2send_pos_w ? (audio2send_pos_w - audio2send_sent)%max_audio2send : max_audio2send;
-    
-    // delay(50);
+
+    // delay(5);
     // printf("[DEBUG] sent: %i pos_w: %i\n", audio2send_sent, tmp);
     // if (audio2send_sent + audio2send >= audio2send_buffer_sz){
     //   send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send_buffer_sz - audio2send_sent);
     //   int audio_left = max_audio2send - (audio2send_buffer_sz - audio2send_sent);
     //   send_data(AUDIO, audio2send_buffer, audio_left);
     //   audio2send_sent = audio_left;
-    // } 
+    // }
     // else {
-    //printf("[DEBUG] sending %i bytes\n", audio2send);
+    // printf("[DEBUG] sending %i bytes\n", audio2send);
     // printf("%i - %i, %i\n", tmp, audio2send_sent, audio2send);
+    int audio2sendbk = audio2send;
     if (audio2send > 256){
+      justsent = 1;
       if (audio2send_sent + audio2send >= audio2send_buffer_sz){
         // printf("%i + %i, max: %i\n", audio2send_sent, audio2send_buffer_sz - audio2send_sent, audio2send_buffer_sz);
         // printf("[DEBUG] sending %i\n", audio2send_buffer_sz - audio2send_sent);
@@ -279,7 +434,7 @@ void loop() {
         //portEXIT_CRITICAL(&timerMuxS);
 
         audio2send = audio2send - (audio2send_buffer_sz - audio2send_sent);
-        audio2send_sent = 0; 
+        audio2send_sent = 0;
         // printf("%i + %i\n", audio2send_sent, audio2send);
 
       }
@@ -295,15 +450,21 @@ void loop() {
       // printf("\n");
 
       audio2send_sent = (audio2send_sent + audio2send) % audio2send_buffer_sz;
-
     }
-
-    portENTER_CRITICAL(&timerMuxS);
-    capt_audio = 1;
-    portEXIT_CRITICAL(&timerMuxS);
     
+    // printf("[DEBUG] capture audio!\n");
+    // portENTER_CRITICAL(&timerMuxS);
+    // capt_audio = 1;
+    // portEXIT_CRITICAL(&timerMuxS);
+    
+    int ts2 = millis();
+    // if (justsent){
+    //   printf("[DEBUG] sending %i took %i ms\n", audio2sendbk + audio2send_sent, ts2 - ts1);
+    //   justsent = 0;
     // }
-    
+
+    // }
+
     // if (test_position_counter == 10){
     //   printf("[DEBUG] last 10 w pos:\n");
     //   for (int i=0; i < 10; i++){
@@ -319,9 +480,7 @@ void loop() {
     // if (audio2send_sent == 0) audio2send_pos_w = 0; <===
   }
 
-  // check data from internet
-  int len = 0;
-  int type = get_data(bufferloop, &len);
+
 
 
   //play(600, &(audio_data[wolverine_pos]));
@@ -333,120 +492,116 @@ void loop() {
   copier.copy();
   */
 
+  //get audio data
+  if (call_in_progress){
+    // play_wolverine();
+    int new_audio_len = get_audio_data(bufferloop);
+    // printf("[DEBUG] got %i byets of audio data\n", new_audio_len);
+    // portENTER_CRITICAL_ISR(&new_audioMuxS);
+    // if (new_audio_len>0)
+    //   new_audio=1;
+    // portEXIT_CRITICAL_ISR(&new_audioMuxS);
+    // int tmp_new_audio=0, len=0;
+    // portENTER_CRITICAL_ISR(&new_audioMuxS);
+    // tmp_new_audio=new_audio;
+    // len = new_audio_len;
+    // portEXIT_CRITICAL_ISR(&new_audioMuxS);
+    if (new_audio_len>0) {
+        // Serial.println("I have received audio");
+        //fake_udp.setValue((uint8_t*)bufferloop, len);
+        //pwm.write((uint8_t*)bufferloop, len);
+        // copier.copy();
+        // play(len, bufferloop);
+        /*
+        //play(len, bufferloop);
 
+        // if I have already played some of audio_buffer, or audio buffer is full, then play
+        // if (played_audio_pos > 0 || audio_buffer_pos == buf_sz){
+        if (audio_buffer_pos == buf_sz){
+          Serial.println("Playing audio");
+          //int b2play = buf_sz > played_audio_pos+60 ? 60 : buf_sz - played_audio_pos;
+          //Serial.print("bytes to play, from played_audio_pos: "); Serial.print(b2play); Serial.print(", "); Serial.println(played_audio_pos);
+          //Serial.print("and audio_buffer_pos is "); Serial.println(audio_buffer_pos);
+          //play(b2play, &(audio_buffer[played_audio_pos]));
 
-  switch (type) {
-    case AUDIO:
-      // Serial.println("I have received audio");
-      //fake_udp.setValue((uint8_t*)bufferloop, len);
-      //pwm.write((uint8_t*)bufferloop, len);
-      // copier.copy();
-      // play(len, bufferloop);
-      /*
-      //play(len, bufferloop);
+          for (int i = 0; i < buf_sz; i++){
+            //Serial.printf("%i,", packetBuffer[i]);
+            auto t1 = micros();
+            //ledcWrite(AUDIOPIN_OUT, data[i]); TODO
 
-      // if I have already played some of audio_buffer, or audio buffer is full, then play
-      // if (played_audio_pos > 0 || audio_buffer_pos == buf_sz){
-      if (audio_buffer_pos == buf_sz){
-        Serial.println("Playing audio");
-        //int b2play = buf_sz > played_audio_pos+60 ? 60 : buf_sz - played_audio_pos;
-        //Serial.print("bytes to play, from played_audio_pos: "); Serial.print(b2play); Serial.print(", "); Serial.println(played_audio_pos);
-        //Serial.print("and audio_buffer_pos is "); Serial.println(audio_buffer_pos);
-        //play(b2play, &(audio_buffer[played_audio_pos]));
+            //Serial.print((uint8_t)(data[i])); Serial.print(","); ///255.0f); Serial.print(",");
 
-        for (int i = 0; i < buf_sz; i++){
-          //Serial.printf("%i,", packetBuffer[i]);
-          auto t1 = micros();
-          //ledcWrite(AUDIOPIN_OUT, data[i]); TODO
+            pwm_out.pulse_perc((((uint8_t)(audio_buffer[i]))/255.0f) * 100);
+            auto t2 = micros();
+            delayMicroseconds(125 - (t2-t1)); //125 = 1/freq * 1000000, where freq = 8000
+          }
 
-          //Serial.print((uint8_t)(data[i])); Serial.print(","); ///255.0f); Serial.print(",");
+          //audio_buffer_pos = played_audio_pos;
+          audio_buffer_pos = 0;
+          //played_audio_pos = (played_audio_pos + len)%buf_sz;
 
-          pwm_out.pulse_perc((((uint8_t)(audio_buffer[i]))/255.0f) * 100);
-          auto t2 = micros();
-          delayMicroseconds(125 - (t2-t1)); //125 = 1/freq * 1000000, where freq = 8000
         }
+        Serial.println("Copying audio");
+        */
+        // TODO 1/3 if (audio_buffer_pos >= played_audio_pos || (audio_buffer_pos + len < played_audio_pos )){
+        // if (played_audio_pos != 0){ //TODO not working good
 
-        //audio_buffer_pos = played_audio_pos;
-        audio_buffer_pos = 0;
-        //played_audio_pos = (played_audio_pos + len)%buf_sz;
+        // printf("[DEBUG][NETWORK] %i/%i\n", audio_buffer_pos, buf_sz);
 
-      }
-      Serial.println("Copying audio");
-      */
-      // TODO 1/3 if (audio_buffer_pos >= played_audio_pos || (audio_buffer_pos + len < played_audio_pos )){
-      // if (played_audio_pos != 0){ //TODO not working good
-
-      // printf("[DEBUG][NETWORK] %i/%i\n", audio_buffer_pos, buf_sz);
-
-      // printf("played_audio_pos: %i, audio_buffer_pos: %i\n", played_audio_pos, audio_buffer_pos);
-
-      data2copy = buf_sz - audio_buffer_pos > len ? len : buf_sz - audio_buffer_pos;
-      // portENTER_CRITICAL(&timerMux);
-      // if (played_audio_pos < audio_buffer_pos || (audio_buffer_pos + len) % buf_sz < played_audio_pos){
+        // printf("played_audio_pos: %i, audio_buffer_pos: %i\n", played_audio_pos, audio_buffer_pos);
+        
+        portENTER_CRITICAL(&timerMux);
+        data2copy = buf_sz - audio_buffer_pos > new_audio_len ? new_audio_len : buf_sz - audio_buffer_pos;
+        // portENTER_CRITICAL(&timerMux);
+        // if (played_audio_pos < audio_buffer_pos || (audio_buffer_pos + len) % buf_sz < played_audio_pos){
 
 
-        // if (buf_left >= len){
-        // printf("[DEBUG] writing %i\n", data2copy);
+          // if (buf_left >= len){
+          // printf("[DEBUG] writing %i\n", data2copy);
         memcpy(&(audio_buffer[audio_buffer_pos]), bufferloop, data2copy);
         // memcpy(&(audio_buffer[audio_buffer_pos]), bufferloop, len);
-        portENTER_CRITICAL(&timerMux);
+        // portENTER_CRITICAL(&timerMux);
         audio_buffer_pos += data2copy;
-        portEXIT_CRITICAL(&timerMux);
         audio_buffer_pos = audio_buffer_pos % buf_sz;
-        if (data2copy < len){
-          // printf("[DEBUG] writing %i\n", len-data2copy);
-          memcpy(&(audio_buffer[audio_buffer_pos]), &(bufferloop[data2copy]), len-data2copy);
+        portEXIT_CRITICAL(&timerMux);
+        
+        if (data2copy < new_audio_len){
           portENTER_CRITICAL(&timerMux);
-          audio_buffer_pos += len - data2copy;
+          // printf("[DEBUG] writing %i\n", new_audio_len-data2copy);
+          memcpy(&(audio_buffer[audio_buffer_pos]), &(bufferloop[data2copy]), new_audio_len-data2copy);
+          
+          audio_buffer_pos += new_audio_len - data2copy;
           portEXIT_CRITICAL(&timerMux);
         }
 
+          // if (audio_buffer_pos != played_audio_pos )
+          //   printf("[DEBUG] SHOULD PLAY AUDIOOOO\n");
+          // else
+          //   printf("[DEBUG] audio_buffer_pos = %i, played_audio_pos = %i\n", audio_buffer_pos, played_audio_pos);
 
-      // } else
-      //   portEXIT_CRITICAL(&timerMux);
-      // if (audio_buffer_pos == 0) played_audio_pos = 0;
-      // }
 
-      // printf("data copied, audio_buffer_pos is %i and played_buffer_pos is %i \n", audio_buffer_pos, audio_buffer_pos);
+        // new_audio=0;
 
-      // TODO if - else scommenta (4/3)
-      //   if (audio_buffer_pos >= played_audio_pos)
-      //     available2play = audio_buffer_pos - played_audio_pos;
-      //   else
-      //     available2play = buf_sz - played_audio_pos + audio_buffer_pos;
-      // } else {
-      // printf("cannot copy data\n");
+        // } else
+        //   portEXIT_CRITICAL(&timerMux);
+        // if (audio_buffer_pos == 0) played_audio_pos = 0;
+        // }
 
-      // }
-      //Serial.print("Copied bytes, audio_buffer_pos: "); Serial.print(len); Serial.print(", "); Serial.println(audio_buffer_pos);
+        // printf("data copied, audio_buffer_pos is %i and played_buffer_pos is %i \n", audio_buffer_pos, audio_buffer_pos);
 
-      break;
-    case -1:  //no packet
-      // Serial.println("No packet received");
-      break;
-    default:
-      Serial.print("unrecognized type ");
-      Serial.println(type);
-      break;
-  }
+        // TODO if - else scommenta (4/3)
+        //   if (audio_buffer_pos >= played_audio_pos)
+        //     available2play = audio_buffer_pos - played_audio_pos;
+        //   else
+        //     available2play = buf_sz - played_audio_pos + audio_buffer_pos;
+        // } else {
+        // printf("cannot copy data\n");
 
-  // check data from modem
-  while (Serial2.available()) {
-    serial_buffer[serial_buffer_pos++] = Serial2.read();
-    Serial.write(serial_buffer[serial_buffer_pos - 1]);
-    if (serial_buffer[serial_buffer_pos - 1] == '\n' || serial_buffer[serial_buffer_pos - 1] == '\r') {
-      serial_buffer[serial_buffer_pos] = '\0';
-      parse_serial(serial_buffer);
-      serial_buffer_pos = 0;  //TODO
+        // }
+        //Serial.print("Copied bytes, audio_buffer_pos: "); Serial.print(len); Serial.print(", "); Serial.println(audio_buffer_pos);
     }
   }
 
-  while (Serial.available() && check_serial){
-    char c = Serial.read();
-    Serial.print(".");
-    Serial.print(c);
-    Serial2.write(c);
-  }
   //free(bufferloop);
 
   // if (call_in_progress){ //TODO testa

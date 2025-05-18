@@ -168,13 +168,25 @@ int ts3plugin_init() {
 }
 
 void load_variables(){
-	FILE* var_file = fopen("~/teamspeak-gsm", "r");
-	size_t ret; 
-	unsigned char buffer[1024];
 
-	ret = fread(buffer, sizeof(*buffer), ARRAY_SIZE(buffer), var_file);
-	if (ret != ARRAY_SIZE(buffer)) {
-		fprintf(stderr, "fread() failed: %zu\n", ret);
+	const char* path = "/.local/share/teamspeak-gsm/env";
+	const char *home = getenv("HOME"); // Get the value of $HOME
+	char *fullpath = malloc(strlen(home) + strlen(path) + 1);
+	strcpy(fullpath, home);
+    strcat(fullpath, path);
+
+	FILE* var_file = fopen(fullpath, "r");
+	if (var_file == NULL){
+		perror("Error opening file");
+		fprint("%s\n", path);
+		exit(EXIT_FAILURE);
+	}
+	size_t ret; 
+	unsigned char buffer[2048];
+
+	ret = fread(buffer, sizeof(*buffer), sizeof(buffer), var_file);
+	if (ret == 0) {
+		perror("Config file open, but cannot read it");
 		exit(EXIT_FAILURE);
 	}
 	fclose(var_file);

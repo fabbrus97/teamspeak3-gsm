@@ -14,10 +14,14 @@
 #define DEL_NUMBER
 #define LIST_NUMBERS
 
+extern WiFiServer cmdServer;
+
 //init UDP server
 void TSinit();
 //receive udp data from server - voice, sms or commands
-int get_data(char* data, int* datalen);
+int get_audio_data(char* data);
 int send_data(int type, const uint8_t* data, int size);
+int send_cmd_output(const char* data);
+
 
 #endif
