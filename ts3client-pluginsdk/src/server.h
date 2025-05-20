@@ -43,7 +43,7 @@ int send_voice(short* samples, int sample_counter, int channels);
 int observe_voice(void* callback, unsigned char* data);
 int start_udp_socket();
 void receive_and_play_voice(void*  args);
-int receive_data(uint8_t** data, size_t* len);
+ssize_t receive_data(uint8_t** data);
 
 
 //in voice_buffer we write the voice data we receive from the coap server on the arduino

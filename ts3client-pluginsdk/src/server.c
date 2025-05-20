@@ -132,7 +132,7 @@ int send_voice(short* samples, int sample_counter, int channels){
 
 
     // IP address and port
-    const char* ip_address = "192.168.1.80"; // "192.168.1.80"; 
+    const char* ip_address = "192.168.1.18"; // "192.168.1.80"; 
     int port = 7000; //6000
 
     // float fsamples[sample_counter];
@@ -242,10 +242,8 @@ int send_voice(short* samples, int sample_counter, int channels){
 
         int available = odone - sent > UDP_SIZE ? UDP_SIZE : odone - sent;
         // int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
-        uint8_t tmp[available+1];
-        tmp[0] = 0; 
-        // memcpy(tmp, &(data[sent]), available);
-        memcpy(&(tmp[1]), &(data[sent]), available); 
+        uint8_t tmp[available];
+        memcpy(tmp, &(data[sent]), available); 
         // printf("tmp[i]: ");
         // for (int i = 0; i < available; i++){
         //     printf("%i,",tmp[i]);
@@ -310,7 +308,7 @@ void send_command(char* command, size_t len){
 }
 
 
-int receive_data(uint8_t** data, size_t * len){
+ssize_t receive_data(uint8_t** data){
     struct timespec read_timeout;
     read_timeout.tv_sec=0;
     read_timeout.tv_nsec = 10; //0.1 millisec
@@ -322,31 +320,30 @@ int receive_data(uint8_t** data, size_t * len){
     if (recvBytes <= 0){
         // printf("DEBUG Couldn't receive or no data\n");
         // nanosleep(&myts, &myts);
-        return -1;
     } else {
         // printf("got data from socket, bytes: %li\n", recvBytes);
+    
+        // client_message[recvBytes] = '\0';
+        *data = malloc(sizeof(uint8_t)*recvBytes);
+        memcpy(*data, client_message, recvBytes);
+        // printf("DEBUG i have received the following %i bytes: \n", recvBytes);
+        // for (int i=0; i < recvBytes; i++){
+        //     printf("%i,", client_message[i]);
+        // }
+        // printf("\n");
+        // printf("DEBUG i have copied data and now buffer is: ");
+        // for (int i=0; i < recvBytes; i++){
+        //     printf("%i,", (*data)[i]);
+        // }
+        // printf("\n");
+
+        // if (data == NULL)
+        //     printf("data: aw shit here we go again\n");
+        // else
+        //     printf("data: ok\n");
+
     }
-    *len = recvBytes-1;
-    client_message[recvBytes] = '\0';
-    *data = malloc(sizeof(uint8_t)*recvBytes);
-    memcpy(*data, &(client_message[1]), recvBytes-1);
-    // printf("DEBUG i have received the following %i bytes: \n", recvBytes);
-    // for (int i=0; i < recvBytes; i++){
-    //     printf("%i,", client_message[i]);
-    // }
-    // printf("\n");
-    // printf("DEBUG i have copied data and now buffer is: ");
-    // for (int i=0; i < recvBytes; i++){
-    //     printf("%i,", (*data)[i]);
-    // }
-    // printf("\n");
-
-    // if (data == NULL)
-    //     printf("data: aw shit here we go again\n");
-    // else
-    //     printf("data: ok\n");
-
-    return client_message[0];
+    return recvBytes;
 }
 
 void receive_and_play_voice(void* args){
