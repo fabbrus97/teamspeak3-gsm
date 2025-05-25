@@ -274,7 +274,7 @@ int send_voice(short* samples, int sample_counter, int channels){
 
         sent += available;
 
-        printf("data sent: %i total: %i\n", sent, obuf_size);
+        // printf("[DEBUG] data sent: %i total: %i\n", sent, obuf_size);
 
         // gettimeofday(&tv2, NULL);
         // long long nanoseconds2 = ((long long)tv2.tv_sec * 1000000LL + (long long)tv2.tv_usec)*1000;

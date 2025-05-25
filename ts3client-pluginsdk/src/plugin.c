@@ -133,6 +133,10 @@ void ts3plugin_setFunctionPointers(const struct TS3Functions funcs) {
  * If the function returns 1 on failure, the plugin will be unloaded again.
  */
 int ts3plugin_init() {
+	printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
+    raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
+
+
     char appPath[PATH_BUFSIZE];
     char resourcesPath[PATH_BUFSIZE];
     char configPath[PATH_BUFSIZE];
@@ -142,7 +146,7 @@ int ts3plugin_init() {
     printf("PLUGIN: init\n");
 
 	//load variables
-	load_variables();
+	// load_variables(); //TODO
 
 	// 1. create audio playback device
 	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  //TODO check se la seconda frequenza dev'essere 8000 o 48000
@@ -176,6 +180,7 @@ void load_variables(){
     strcat(fullpath, path);
 
 	FILE* var_file = fopen(fullpath, "r");
+
 	if (var_file == NULL){
 		perror("Error opening file");
 		fprint("%s\n", path);
@@ -292,7 +297,7 @@ void* main_loop_play(void* args){
 					// printf("\n");
 					// Playback data available, send playbackBuffer to your custom device
 
-						printf("i should send voice\n");
+						// printf("[DEBUG] i should send voice\n");
 						send_voice(&playbackBuffer, playbackBufferSize, 1); //TODO check se non sia 2
 
 					// else
@@ -641,7 +646,7 @@ void ts3plugin_registerPluginID(const char* id) {
 
 /* Plugin command keyword. Return NULL or "" if not used. */
 const char* ts3plugin_commandKeyword() {
-	return "test";
+	return "!test";
 }
 
 static void print_and_free_bookmarks_list(struct PluginBookmarkList* list)
@@ -673,13 +678,14 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 
 	printf("PLUGIN: process command: '%s'\n", command);
 
-	_strcpy(buf, COMMAND_BUFSIZE, command);
+	_strcpy(buf, COMMAND_BUFSIZE, command + strlen(ts3plugin_commandKeyword())+1); // skip the commandkeyword and the space
 #ifdef _WIN32
 	s = strtok_s(buf, " ", &context);
 #else
 	s = strtok(buf, " ");
 #endif
 	while(s != NULL) {
+		printf("[DEBUG] checking s %s\n", s);
 		if(i == 0) {
 			if(!strcmp(s, "join")) {
 				cmd = CMD_JOIN;
@@ -688,6 +694,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 			} else if(!strcmp(s, "serverinfo")) {
 				cmd = CMD_SERVERINFO;
 			} else if(!strcmp(s, "channelinfo")) {
+				printf("[DEBUG] strcmp positive for 'channelinfo'\n");
 				cmd = CMD_CHANNELINFO;
 			} else if(!strcmp(s, "avatar")) {
 				cmd = CMD_AVATAR;
@@ -785,6 +792,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 			break;
 		}
 		case CMD_CHANNELINFO: {  /* /test channelinfo */
+			printf("[DEBUG] processing a CMD_CHANNELINFO command\n");
 			/* Query channel path and password of current server tab.
 			 * The password parameter can be NULL if the plugin does not want to receive the channel password.
 			 * Note: Channel password is only available if the user has actually used it when entering the channel. If a user has
@@ -796,6 +804,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 			char* password = NULL;  /* Don't receive channel password */
 
 			/* Get own clientID and channelID */
+			//FIXME si rompe qua in getClientID oppure in getChannelOfClient (può essere colpa di 'serverConnectionHandlerID'?)
 			anyID myID;
 			uint64 myChannelID;
 			if(ts3Functions.getClientID(serverConnectionHandlerID, &myID) != ERROR_ok) {
@@ -813,8 +822,20 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 				char msg[CHANNELINFO_BUFSIZE];
 				snprintf(msg, sizeof(msg), "Channel Connect Info: %s", path);
 				ts3Functions.printMessageToCurrentTab(msg);
+				ts3Functions.requestSendChannelTextMsg(
+					serverConnectionHandlerID, 
+					msg,
+					myChannelID,
+					NULL
+				);
 			} else {
 				ts3Functions.printMessageToCurrentTab("No channel connect info available.");
+				ts3Functions.requestSendChannelTextMsg(
+					serverConnectionHandlerID, 
+					"No channel connect info available.",
+					myChannelID,
+					NULL
+				);
 			}
 			break;
 		}
@@ -1245,7 +1266,10 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 		// pthread_create(&t1, NULL, main_loop_play, NULL);
 		pthread_create(&t1, NULL, main_loop_play, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
 		pthread_create(&t2, NULL, main_loop_acquire, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
+		
 
+		//INIT MY AT COMMANDS LIBRARY
+		at_init(NULL, NULL);
     }
 }
 
@@ -1327,12 +1351,54 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 
 	//check if user is enabled
 
-	if (!strncmp(message, "/tsgsm", 6)){
-		return 1;
+	if (strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())) == 0){
+		printf("[DEBUG] got a command!!!!\n");
+		anyID myID;
+		if(ts3Functions.getClientID(serverConnectionHandlerID, &myID) != ERROR_ok) {
+			ts3Functions.logMessage("Error querying own client id", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+			return 1;
+		}
+
+		//assume every command is an at command
+		char* output = NULL;
+		char at_message[strlen(message) - (strlen(ts3plugin_commandKeyword()) + 1)];
+		strncpy(at_message, message + (strlen(ts3plugin_commandKeyword()) + 1), strlen(message) - (strlen(ts3plugin_commandKeyword()) + 1));
+		at_message[strlen(message) - (strlen(ts3plugin_commandKeyword()))] = '\0';
+		int at_output = at_process_command(at_message, &output);
+		printf("[DEBUG] output of at_command: %s\n", output);
+		if (output == NULL) //we did not handle the command
+			return ts3plugin_processCommand(serverConnectionHandlerID, message);
+		else {
+			printf("[DEBUG] I should reply: %s\n", output);
+
+			uint64 myChannelID;
+			/* Get own channel ID */
+			if(ts3Functions.getChannelOfClient(serverConnectionHandlerID, myID, &myChannelID) != ERROR_ok) {
+				ts3Functions.logMessage("Error querying channel ID", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+			}
+			// printf("[DEBUG] got channel id: %li and serverConnHandlID %li\n", myChannelID, serverConnectionHandlerID);
+			
+			ts3Functions.requestSendChannelTextMsg(
+				serverConnectionHandlerID, 
+				output,
+				myChannelID,
+				NULL
+			);
+			free(output);
+			// printf("[DEUBG] chat send done\n");
+			return at_output;
+		}
+		
+	} else {
+		printf("[DEBUG] message/keyword/kw/cmp: %s/%s/%i\n", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
 	}
 
-	char command[(sizeof(message)-7)+1];
-	strcpy(command, message[7]);
+	// if (!strncmp(message, "/tsgsm", 6)){
+	// 	return 1;
+	// }
+
+	// char command[(sizeof(message)-7)+1];
+	// strcpy(command, message[7]);
 
 
 
@@ -1354,7 +1420,7 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 	}
 #endif
 
-    return 0;  /* 0 = handle normally, 1 = client will ignore the text message */
+    return 1;  /* 0 = handle normally, 1 = client will ignore the text message */
 }
 
 void ts3plugin_onTalkStatusChangeEvent(uint64 serverConnectionHandlerID, int status, int isReceivedWhisper, anyID clientID) {

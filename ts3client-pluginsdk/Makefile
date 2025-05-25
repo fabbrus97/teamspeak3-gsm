@@ -3,7 +3,8 @@
 #
 
 OUTPUT = "${HOME}/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so"
-CFLAGS = -c -O2 -Wall -fPIC
+# CFLAGS = -c -O2 -Wall -fPIC
+CFLAGS = -c -g -O0 -Wall -fPIC
 
 all: config test_plugin
 
@@ -13,8 +14,8 @@ config:
 	echo arduino_ip=1.2.3.4 >> ~/.local/share/teamspeak-gsm/env
 	echo arduino_port=1234 >> ~/.local/share/teamspeak-gsm/env
 
-test_plugin: server.o plugin.o
-	gcc -o $(OUTPUT) -shared plugin.o server.o -lsoxr 
+test_plugin: server.o plugin.o at_commands.o
+	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o -lsoxr 
 #-lcoap-3-notls 
 
 plugin.o: ./src/plugin.c
@@ -23,6 +24,9 @@ plugin.o: ./src/plugin.c
 server.o: ./src/server.c
 	gcc -Iinclude -I/usr/include/soxr src/server.c $(CFLAGS)
 # -I/usr/include/coap3 -lcoap-3-notls 
+
+at_commands.o: ./src/utils/at_commands.c
+	gcc -Isrc/utils src/utils/at_commands.c $(CFLAGS)
 
 clean:
 	rm -rf *.o /home/simone/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so

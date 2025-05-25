@@ -8,6 +8,8 @@
 #define PLUGIN_H
 
 #include "server.h"
+#include "utils/at_commands.h"
+#include <signal.h>
 
 #if defined(WIN32) || defined(__WIN32__) || defined(_WIN32)
 #define PLUGINS_EXPORTDLL __declspec(dllexport)
