@@ -133,8 +133,8 @@ void ts3plugin_setFunctionPointers(const struct TS3Functions funcs) {
  * If the function returns 1 on failure, the plugin will be unloaded again.
  */
 int ts3plugin_init() {
-	printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
-    raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
+	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
+    // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
 
 
     char appPath[PATH_BUFSIZE];
@@ -1361,10 +1361,14 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 
 		//assume every command is an at command
 		char* output = NULL;
-		char at_message[strlen(message) - (strlen(ts3plugin_commandKeyword()) + 1)];
-		strncpy(at_message, message + (strlen(ts3plugin_commandKeyword()) + 1), strlen(message) - (strlen(ts3plugin_commandKeyword()) + 1));
-		at_message[strlen(message) - (strlen(ts3plugin_commandKeyword()))] = '\0';
+		int at_message_len = strlen(message) - (strlen(ts3plugin_commandKeyword()) + 1);
+		char at_message[at_message_len+1];
+		strncpy(at_message, message + (strlen(ts3plugin_commandKeyword()) + 1), at_message_len);
+
+		at_message[at_message_len] = '\0';
 		int at_output = at_process_command(at_message, &output);
+		// char* mymessage = "!test phonebook read 1 9\0";
+		// int at_output = at_process_command(mymessage, &output);
 		printf("[DEBUG] output of at_command: %s\n", output);
 		if (output == NULL) //we did not handle the command
 			return ts3plugin_processCommand(serverConnectionHandlerID, message);
