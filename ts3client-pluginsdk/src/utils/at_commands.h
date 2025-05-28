@@ -10,7 +10,8 @@
 #include <stdlib.h>
 
 #define TCP_LISTEN_PORT 8001
-#define TCP_SERVER "192.168.1.11"
+// #define TCP_SERVER "192.168.1.11"
+#define TCP_SERVER "192.168.1.18"
 #define TCP_BUFFER 1024
 
 // Define a struct for generic CRUD operations
