@@ -1,4 +1,9 @@
-#ifndef AT_COMMANDS_H
+/*
+    Reference for the commands:
+    https://cdn-shop.adafruit.com/datasheets/sim800_series_at_command_manual_v1.01.pdf
+*/
+
+#ifndef AT_COMMANDS_H 
 #define AT_COMMANDS_H
 
 #include <stdio.h>
@@ -8,10 +13,10 @@
 #include <unistd.h> 
 #include <string.h>
 #include <stdlib.h>
+#include <iconv.h>
 
-#define TCP_LISTEN_PORT 8001
-// #define TCP_SERVER "192.168.1.11"
-#define TCP_SERVER "192.168.1.18"
+#include "../settings.h"
+
 #define TCP_BUFFER 1024
 
 // Define a struct for generic CRUD operations
@@ -32,8 +37,8 @@ char* at_phonebook_delete(char* index);
 //texts apis
 // CrudAPI text_api;
 char* at_text_create(char* dest, char* text);
-char* at_text_read(char* dest, char* text); //TODO
-char* at_text_delete(char* dest, char* text); //TODO
+char* at_text_read(int index, char* mode);
+char* at_text_delete(int index, char* flag);
 
 //call apis
 char* at_call_make(char* name);
@@ -50,8 +55,7 @@ char* at_can_text(int flag);
 char* at_answer_phonebook_only(int flag);
 //TODO blacklist?
 
-char* at_set_text_mode(char* mode); //TODO
-//TODO opzione per le emoji?
+char** at_set_text_mode(); 
 
 //network
 char* at_check_network_status();
@@ -60,6 +64,8 @@ char* at_check_network_status();
 char* at_send_AT();
 
 int at_send_command(char* command, char** output);
+
+char* get_own_number();
 
 char* at_help();  
 

@@ -21,20 +21,15 @@
 #include <time.h>
 // #include <struct_timespec.h>
 
+#include "settings.h"
+
 
 #define ISIZE 48000
 #define OSIZE 8000
-#define UDP_LISTEN_PORT 8000
-#define AUDIO 0
-#define CMD_OUTPUT 1
-// #define SMS 1
-//TODO definisci cose
+
 
 // char* server_address;
 // char* server_port;
-
-static char* server_cmd_address;
-static char* server_cmd_port;
 
 // int resolve_address(const char *host, const char *service, coap_address_t *dst);
 // void* resps_hndl(coap_context_t *context, coap_session_t *session, coap_pdu_t *sent, coap_pdu_t *received, const coap_mid_t id);

@@ -18,7 +18,6 @@
 #include "teamspeak/public_definitions.h"
 #include "teamspeak/public_rare_definitions.h"
 #include "teamspeak/clientlib_publicdefinitions.h"
-#include "ts3_functions.h"
 #include "plugin.h"
 #include <pthread.h>
 #include <semaphore.h>
@@ -44,7 +43,6 @@
 const char* devID = "ts3callbotplayback";
 const char* devDisplayName = "ts3_callbot_playback";
 sem_t c_pb_sem;
-char* channel_to_connect;
 
 static char* pluginID = NULL;
 static uint64 currentServerConnectionHandlerID;
@@ -133,10 +131,6 @@ void ts3plugin_setFunctionPointers(const struct TS3Functions funcs) {
  * If the function returns 1 on failure, the plugin will be unloaded again.
  */
 int ts3plugin_init() {
-	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
-    // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
-
-
     char appPath[PATH_BUFSIZE];
     char resourcesPath[PATH_BUFSIZE];
     char configPath[PATH_BUFSIZE];
@@ -146,7 +140,7 @@ int ts3plugin_init() {
     printf("PLUGIN: init\n");
 
 	//load variables
-	// load_variables(); //TODO
+	load_variables();
 
 	// 1. create audio playback device
 	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  //TODO check se la seconda frequenza dev'essere 8000 o 48000
@@ -165,68 +159,13 @@ int ts3plugin_init() {
 
 	printf("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s\n", appPath, resourcesPath, configPath, pluginPath);
 
+	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
+    // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
+
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
 	 * the plugin again, avoiding the show another dialog by the client telling the user the plugin failed to load.
 	 * For normal case, if a plugin really failed to load because of an error, the correct return value is 1. */
-}
-
-void load_variables(){
-
-	const char* path = "/.local/share/teamspeak-gsm/env";
-	const char *home = getenv("HOME"); // Get the value of $HOME
-	char *fullpath = malloc(strlen(home) + strlen(path) + 1);
-	strcpy(fullpath, home);
-    strcat(fullpath, path);
-
-	FILE* var_file = fopen(fullpath, "r");
-
-	if (var_file == NULL){
-		perror("Error opening file");
-		fprint("%s\n", path);
-		exit(EXIT_FAILURE);
-	}
-	size_t ret;
-	unsigned char buffer[2048];
-
-	ret = fread(buffer, sizeof(*buffer), sizeof(buffer), var_file);
-	if (ret == 0) {
-		perror("Config file open, but cannot read it");
-		exit(EXIT_FAILURE);
-	}
-	fclose(var_file);
-
-	unsigned char name[64];
-	unsigned char value[64];
-	int parse_name = 1;
-	int tmp_i = 0;
-	int i=0;
-	do {
-		char current = buffer[i];
-		if (i=="=") {
-			parse_name == 0;
-			name[tmp_i] = "\0";
-			tmp_i = 0;
-		}
-		else if (i=="\n") {
-			parse_name == 1;
-			tmp_i=0;
-			if (strcmp(name, "arduino_ip") == 0){
-				server_cmd_address = value;
-			}
-			if (strcmp(name, "arduino_port") == 0){
-				server_cmd_port = value;
-			}
-		}
-		else if (parse_name){
-			name[tmp_i++] = buffer[i];
-		} else if (!parse_name){
-			value[tmp_i++] = buffer[i];
-		}
-		i++;
-	} while (buffer[i] != "\0");
-
-
 }
 
 //play data acquired from network (esp32) on ts client
@@ -432,78 +371,52 @@ void* main_loop_acquire(void* args){
 		// printf("my thread id is %i\n", self);
 
 		receivedBytes = receive_data(&mybuffer);
-		int type=AUDIO; //TODO
 
 
-		switch (type)
-		{
-		case AUDIO:
-			// printf("Waiting for some audio to be played...\n");
-
-			while (1){
-				sem_wait(&c_pb_sem);
-				if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
-					// printf("[DEBUG] I'm ready to write to buffer!\n");
-					sem_post(&c_pb_sem);
-					break;
-				}
-				sem_post(&c_pb_sem);
-				// printf("[DEBUG] cannot write to buffer because not ready\n");
-				printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
-
-				// usleep(200);
-			}
-
-
-			bytes2write = audio_buffer_size - audio_buffer_pos;
-			bytes2write = bytes2write > receivedBytes ? receivedBytes : bytes2write;
-
-			printf("[W_INFO] writing audio to %i - %i\n", audio_buffer_pos, audio_buffer_pos+bytes2write);
-
-			// while ((audio_buffer_pos < audio_buffer_played && ((audio_buffer_pos + bytes2write) >= audio_buffer_played)) ){
-			// 	usleep(100);
-			// }
-
-			// printf("[SEM_P] Writing %i bytes in buffer\n", bytes2write);
-
-			for (int i = 0; i < bytes2write; i++){
-				// printf("byte %i ok: %i\n", i, mybuffer);
-				// printf("%i, ", mybuffer[i]);
-				// uint8_t uintval = mybuffer[i];
-				// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
-				audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
-				// audio_buffer[i] = shortVal;
-				// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
-
-
-			}
+		
+		while (1){
 			sem_wait(&c_pb_sem);
-			audio_buffer_pos = (audio_buffer_pos + bytes2write) % audio_buffer_size;
+			if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
+				// printf("[DEBUG] I'm ready to write to buffer!\n");
+				sem_post(&c_pb_sem);
+				break;
+			}
 			sem_post(&c_pb_sem);
+			// printf("[DEBUG] cannot write to buffer because not ready\n");
+			printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
+
+			// usleep(200);
+		}
+
+
+		bytes2write = audio_buffer_size - audio_buffer_pos;
+		bytes2write = bytes2write > receivedBytes ? receivedBytes : bytes2write;
+
+		printf("[W_INFO] writing audio to %i - %i\n", audio_buffer_pos, audio_buffer_pos+bytes2write);
+
+		// while ((audio_buffer_pos < audio_buffer_played && ((audio_buffer_pos + bytes2write) >= audio_buffer_played)) ){
+		// 	usleep(100);
+		// }
+
+		// printf("[SEM_P] Writing %i bytes in buffer\n", bytes2write);
+
+		for (int i = 0; i < bytes2write; i++){
+			// printf("byte %i ok: %i\n", i, mybuffer);
+			// printf("%i, ", mybuffer[i]);
+			// uint8_t uintval = mybuffer[i];
+			// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
+			audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
+			// audio_buffer[i] = shortVal;
+			// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
+
+
+		}
+		sem_wait(&c_pb_sem);
+		audio_buffer_pos = (audio_buffer_pos + bytes2write) % audio_buffer_size;
+		sem_post(&c_pb_sem);
 			// printf("[SEM_V] Data written\n");
 
-			break;
-		case CMD_OUTPUT:
-			anyID myID;
-			uint64 myChannelID;
-			if(ts3Functions.getClientID(currentServerConnectionHandlerID, &myID) != ERROR_ok) {
-				ts3Functions.logMessage("Error querying client ID", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
-				break;
-			}
-			if(ts3Functions.getChannelOfClient(currentServerConnectionHandlerID, myID, &myChannelID) != ERROR_ok) {
-				ts3Functions.logMessage("Error querying channel ID", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
-				break;
-			}
-			if(ts3Functions.requestSendChannelTextMsg(currentServerConnectionHandlerID, mybuffer, myChannelID, NULL) != ERROR_ok) {
-				ts3Functions.logMessage("Error requesting send text message", LogLevel_ERROR, "Plugin", currentServerConnectionHandlerID);
-			}
-
-			break;
-		default:
-			// printf("UNKNOWN DATA!!!!\n");
-
-			break;
-		}
+			
 		// free(&mybuffer); //TODO memory leak!
 
 
@@ -550,7 +463,7 @@ void* main_loop_play_old(void* arg)
 
     // Set port and IP:
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(UDP_LISTEN_PORT);
+    server_addr.sin_port = htons(ts_audio_port);
     server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
 
     // Bind to the set port and IP:
@@ -1341,8 +1254,11 @@ int ts3plugin_onServerErrorEvent(uint64 serverConnectionHandlerID, const char* e
 void ts3plugin_onServerStopEvent(uint64 serverConnectionHandlerID, const char* shutdownMessage) {
 }
 
+// si è rotto a 30, 34 caratteri
+
 int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetMode, anyID toID, anyID fromID, const char* fromName, const char* fromUniqueIdentifier, const char* message, int ffIgnored) {
-    printf("PLUGIN: onTextMessageEvent %llu %d %d %s %s %d\n", (long long unsigned int)serverConnectionHandlerID, targetMode, fromID, fromName, message, ffIgnored);
+    printf("[DEBUG] ts3plugin_onTextMessageEvent!\n");
+	printf("PLUGIN: onTextMessageEvent %llu %d %d %s %s %d\n", (long long unsigned int)serverConnectionHandlerID, targetMode, fromID, fromName, message, ffIgnored);
 
 	/* Friend/Foe manager has ignored the message, so ignore here as well. */
 	if(ffIgnored) {
@@ -1350,6 +1266,8 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 	}
 
 	//check if user is enabled
+
+	#if 1
 
 	if (strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())) == 0){
 		printf("[DEBUG] got a command!!!!\n");
@@ -1388,8 +1306,9 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 				myChannelID,
 				NULL
 			);
-			free(output);
-			// printf("[DEUBG] chat send done\n");
+			//TODO scommenta
+			// free(output);
+			printf("[DEUBG] at_output is %i\n", at_output);
 			return at_output;
 		}
 		
@@ -1404,7 +1323,7 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 	// char command[(sizeof(message)-7)+1];
 	// strcpy(command, message[7]);
 
-
+	#endif
 
 #if 0
 	{

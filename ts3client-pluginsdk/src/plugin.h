@@ -9,6 +9,8 @@
 
 #include "server.h"
 #include "utils/at_commands.h"
+#include "ts3_functions.h"
+#include "settings.h"
 #include <signal.h>
 
 #if defined(WIN32) || defined(__WIN32__) || defined(_WIN32)
