@@ -3,10 +3,6 @@
 #define UDP_SIZE 512
 
 
-// char* server_address = "127.0.0.1";
-// char* server_cmd_address = "192.168.1.20";
-// char* server_cmd_port = "5683";
-
 static unsigned int token_obs = 0;
 sem_t sem_voice_buffer;
 static int have_response = 0;
@@ -35,8 +31,8 @@ int start_udp_socket(){
 
     // Set port and IP:
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(UDP_LISTEN_PORT);
-    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    server_addr.sin_port = htons(ts_audio_port);
+    server_addr.sin_addr.s_addr = inet_addr(ts_ip_bind);
 
     // Bind to the set port and IP:
     if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
@@ -132,8 +128,6 @@ int send_voice(short* samples, int sample_counter, int channels){
 
 
     // IP address and port
-    const char* ip_address = "192.168.1.18"; // "192.168.1.80"; 
-    int port = 7000; //6000
 
     // float fsamples[sample_counter];
     // for (int i = 0; i < sample_counter; i++){
@@ -144,8 +138,8 @@ int send_voice(short* samples, int sample_counter, int channels){
     struct sockaddr_in test_client_addr;
     memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
     test_client_addr.sin_family = AF_INET; // IPv4
-    test_client_addr.sin_port = htons(port); // Port in network byte order
-    inet_pton(AF_INET, ip_address, &test_client_addr.sin_addr); // Convert IP address to binary
+    test_client_addr.sin_port = htons(ucontroller_audio_port); // Port in network byte order
+    inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
 
     // if (client_addr == NULL) TODO
     //   return 0;
@@ -297,8 +291,8 @@ void send_command(char* command, size_t len){
     struct sockaddr_in test_client_addr;
     memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
     test_client_addr.sin_family = AF_INET; // IPv4
-    test_client_addr.sin_port = htons(server_cmd_port); // Port in network byte order
-    inet_pton(AF_INET, server_cmd_address, &test_client_addr.sin_addr); // Convert IP address to binary
+    test_client_addr.sin_port = htons(ucontroller_cmd_port); // Port in network byte order
+    inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
 
     if (sendto(socket_desc, command, len, 0,
         (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0){

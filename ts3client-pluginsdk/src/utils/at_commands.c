@@ -35,29 +35,115 @@ char* at_phonebook_read(char* index1, char* index2){
 char* at_phonebook_delete(char* index){
     size_t bufsize = 50;
     char* result = (char*)malloc(bufsize);
-    if (!result) return NULL;
     snprintf(result, bufsize, "AT+CPBW=%s", index);  // delete by number
     return result;
 }
 
-char* at_text_create(char* dest, char* text){
-     return NULL;
+void utf8_to_ucs2_encoder(char* src, char* output){
+    //change encoding
+    size_t bufsize = strlen(src);
+    iconv_t cd = iconv_open("UCS-2BE", "UTF-8");
+    size_t out_len = bufsize * 2; // Worst case
+    char* ucs2_str = malloc(out_len); memset(ucs2_str, 0, out_len);
+    
+    iconv(cd, &src, &bufsize, &ucs2_str, &out_len);
+    iconv_close(cd);
+
+    // converting to hex string
+    size_t ucs2_len = (&out_len) - (size_t)ucs2_str; // pointer arithmetic
+    char* hex_str = malloc(ucs2_len * 2 + 1);
+        for (size_t i = 0; i < ucs2_len; ++i) {
+        sprintf(hex_str + i * 2, "%02X", (unsigned char)ucs2_str[i]);
+    }
+    hex_str[ucs2_len * 2] = '\0';
+    free(ucs2_str);
+    output = hex_str;
 }
 
-char* at_text_read(char* dest, char* text){
-     return NULL;
+/*
+    // AT+CMGS=<da>[,<toda>],<CR> send sms
+    da: destination addess in string format (string should be included in quotation marks)
+    toda: type of address (145 or 129)
+*/
+char* at_text_create(char* dest, char* text){
+     
+    size_t bufsize = 1024; 
+    char* result = malloc(bufsize);
+    
+    /* 
+    * converting to usc2 encoding to support emojis 😍😍😍 
+    */
+    char* hex_dest, hex_text; 
+    utf8_to_ucs2_encoder(dest, hex_dest);    
+    utf8_to_ucs2_encoder(text, hex_text);    
+
+    snprintf(result, bufsize, "AT+CMGS=\"%s\"\r%s%c", hex_dest, hex_text, 0x1A);
+
+    free(hex_dest);
+    free(hex_text);
+    
+    return result;
+}
+
+/*
+    AT+CMGL=<stat> list sms
+    stats:
+        REC UNREAD: received unread messages
+        REC READ: received read messages
+        STO UNSENT: stored unsent messages
+        STO SENT: stored sent messages
+        ALL: all
+    AT+CMGR=<index> read sms
+*/
+char* at_text_read(int index, char* mode){
+     
+    size_t bufsize = 50;
+    char* result = (char*)malloc(bufsize);
+    if (index != NULL)
+        snprintf(result, bufsize, "AT+CMGR=%i", index);
+    else {
+        if(strcmp(mode, "sent") == 0){
+            snprintf(result, bufsize, "AT+CMGL=%s", "STO SENT");
+        } else if(strcmp(mode, "unread") == 0){
+            snprintf(result, bufsize, "AT+CMGL=%s", "REC UNREAD");
+        } else if(strcmp(mode, "read") == 0){
+            snprintf(result, bufsize, "AT+CMGL=%s", "REC READ");
+        }
+    }
+    return result;
+
 } 
 
-//TODO
-char* at_text_delete(char* dest, char* text){
-    return NULL;
+/*
+    AT+CMDGD=<index>,<flag> delete sms; 
+    flags: 
+        0: delete <index>; 
+        1: delete all read messages; 
+        2: delete all read and sent; 
+        3: delete read, sent and saved (unsent) messages; 
+        4: delete all messages (even unread)
+*/ 
+char* at_text_delete(int index, char* flag){
+    
+    int delflag = 0;
+    if (flag != NULL && strcmp(flag, "read") == 0){
+        delflag = 1;
+    }
+    if (flag != NULL && strcmp(flag, "all") == 0){
+        delflag = 4;
+    }
+
+    size_t maxlen = 25;
+    char* result = malloc(maxlen);
+    snprintf(result, maxlen, "AT+CMGD=%i,%i", index, delflag);
+            
+    return result;
 } 
 
-//TODO
 char* at_call_make(char* name){
-    char* buffer = malloc(20);  // allocate memory on the heap
+    char* buffer = malloc(40);  // allocate memory on the heap
     if (buffer != NULL) {
-        snprintf(buffer, 20, "ATD%s;\n", name);
+        snprintf(buffer, 40, "ATD%s;\n", name);
     }
     return buffer;
     
@@ -95,8 +181,14 @@ char* at_answer_phonebook_only(int flag){
     return NULL;
 }
 
-char* at_set_text_mode(char* mode){
-    return NULL;
+char** at_set_text_mode(){
+    char* textmode = "AT+CMGF=1";
+    char* encoding = "AT+CSCS=\"UCS2\"";
+    char* command1 = malloc(strlen(textmode)+1);
+    char* command2 = malloc(strlen(encoding)+1);
+    char** commands = malloc(sizeof(command1)*2+1);
+    commands[0] = command1; commands[1] = command2; commands[2] = NULL;
+    return commands;
 } 
 
 //TODO
@@ -132,6 +224,12 @@ int at_send_command(char* command, char** output){
     char recv_buf[TCP_BUFFER];
     int b_recv;
 
+    // int crash_str_size = 33;
+    // *output = malloc(crash_str_size+1);
+    // *output = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0"; //33
+    
+    #if 1
+
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
         perror("socket failed");
@@ -157,18 +255,26 @@ int at_send_command(char* command, char** output){
         return 0;
     }
 
-    printf("[DEBUG] b_recv/strlen(buf): %i/%i\n", b_recv, strlen(recv_buf));
+    close(sockfd);
+
+    // recv_buf[b_recv] = '\0';
+    // printf("[DEBUG] b_recv/strlen(buf): %i/%i\n", b_recv, strlen(recv_buf));
     
-    *output = malloc(b_recv);
+    if (output != NULL){
+        *output = malloc(b_recv+1);
 
 
-    memcpy(*output, recv_buf, b_recv-1);
-    output[b_recv] = "\0";
-
-    printf("[DEBUG] at command recv_buf: %s\n", recv_buf);
-    printf("[DEBUG] copied recv_buf into output: %s\n", *output);
+        memcpy(*output, recv_buf, b_recv);
+        (*output)[b_recv] = '\0';
+    }
+    // printf("[DEBUG] at command recv_buf: %s\n", recv_buf);
+    // printf("[DEBUG] copied recv_buf into output: %s\n", *output);
     
     return b_recv;
+    #endif
+
+    // return crash_str_size;
+    
 }
 
 void at_init(char* server, int port){
@@ -176,12 +282,12 @@ void at_init(char* server, int port){
     if (server != NULL){
         server_addr.sin_addr.s_addr = inet_addr(server);
     } else {
-        server_addr.sin_addr.s_addr = inet_addr(TCP_SERVER);
+        server_addr.sin_addr.s_addr = inet_addr(ucontroller_address);
     }
     if (port != NULL){
         server_addr.sin_port = htons(port);
     } else {
-        server_addr.sin_port = htons(TCP_LISTEN_PORT);
+        server_addr.sin_port = htons(ucontroller_cmd_port);
     }
 }
 
@@ -205,9 +311,9 @@ int at_process_command(const char* command, char** output){
 				cmd = CMD_PHONEBOOK;
 			} else if(!strcmp(s, "text")) {
 				cmd = CMD_TEXT;
-			} else if(!strcmp(s, "call_make")) {
+			} else if(!strcmp(s, "call")) {
 				cmd = CMD_CALL_MAKE;
-			} else if(!strcmp(s, "call_hang")) {
+			} else if(!strcmp(s, "hang")) {
 				cmd = CMD_CALL_HANG;
             }
 		} else if(i == 1) {
@@ -223,7 +329,7 @@ int at_process_command(const char* command, char** output){
 		i++;
 	}
 
-    char* cmd_str;
+    char* cmd_str; char** cmd_list;
 	switch(cmd) {
 		case CMD_NONE:
 			return 1;  /* Command not handled by at */
@@ -263,10 +369,48 @@ int at_process_command(const char* command, char** output){
                     }
                 }
 			} 
-            // free(cmd_str); //TODO
             return -1;
+        case CMD_TEXT:
+            if (param1){
+                if (param2 && param3){
+                    if (strcmp(param1, "delete") == 0){
+                        at_send_command(cmd_str = text_api.del(param2, param3), output);
+                        break;
+                    } else if (strcmp(param1, "send") == 0){
+                        
+                        char** _cmd_list = at_set_text_mode();
+                        cmd_list = _cmd_list;
+                        while (_cmd_list != NULL){
+                            at_send_command(*_cmd_list, output);
+                            _cmd_list++;
+                        }
+                        at_send_command(cmd_str = text_api.create(param2, param3), output);
+                        break;
+                    }
+                }
+                else if (param2){
+                    if (strcmp(param1, "delete") == 0){
+                        at_send_command(cmd_str = text_api.del(param2, NULL), output);
+                        break;
+                    }
+                    if (strcmp(param1, "read") == 0){
+                        at_send_command(cmd_str = text_api.read(param2, NULL), output);
+                        break;
+                    }
+                } else if (param3){
+                    if (strcmp(param1, "read") == 0){
+                        at_send_command(cmd_str = text_api.read(NULL, param3), output);
+                        break;
+                    }
+                }
+            }
+            
+
+            return -1;
+            
 	}
 
-    // free(cmd_str); //TODO
+    free(cmd_str); 
+    free(cmd_list); 
 	return 0;  /* AT handled command */
 }
