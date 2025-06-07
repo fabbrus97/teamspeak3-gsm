@@ -1,3 +1,8 @@
+/*
+    Reference for the commands:
+    https://cdn-shop.adafruit.com/datasheets/sim800_series_at_command_manual_v1.01.pdf
+*/
+
 #include "at_commands.h"
 
 static struct sockaddr_in server_addr;
@@ -186,17 +191,60 @@ char** at_set_text_mode(){
     char* encoding = "AT+CSCS=\"UCS2\"";
     char* command1 = malloc(strlen(textmode)+1);
     char* command2 = malloc(strlen(encoding)+1);
+    snprintf(command1, strlen(textmode), "%s", textmode);
+    snprintf(command2, strlen(encoding), "%s", encoding);
     char** commands = malloc(sizeof(command1)*2+1);
     commands[0] = command1; commands[1] = command2; commands[2] = NULL;
     return commands;
 } 
 
-//TODO
-char* at_check_network_status(){
-//     AT+CSQ        --> Check signal quality
+/*
+    Execution Command: AT+CSQ
+    Response: +CSQ: <rssi>,<ber>
+    Parameters
+        <rssi>
+            0 -115 dBm or less
+            1 -111 dBm
+            2...30 -110... -54 dBm
+            31 -52 dBm or greater
+            99 not known or not detectable
+        <ber> (in percent):
+            0...7 As RXQUAL values in the table in GSM 05.08 [20]
+                  subclause 7.2.4
+            99 Not known or not detectable
+    
+    Read Command: AT+CREG?  
+    Response: TA returns the status of result code presentation and an integer <stat>
+              which shows whether the network has currently indicated the registration
+              of the ME. Location information elements <lac> and <ci> are returned
+              only when <n>=2 and ME is registered in the network.
+              +CREG: <n>,<stat>[,<lac>,<ci>]
+
+    Read Command: AT+COPS?
+    Response: TA returns the current mode and the currently selected operator. If no
+              operator is selected, <format> and <oper> are omitted.
+              +COPS: <mode>[,<format>, <oper>]
+*/
+char** at_check_network_status(){
+// AT+CSQ        --> Check signal quality
 // AT+CREG?      --> Check network registration status
 // AT+COPS?      --> Check current operator
-    return NULL;
+    char* csq = "AT+CSQ";
+    char* creg = "AT+CREG?";
+    char* cops = "AT+COPS?";
+
+    char* command1 = malloc(strlen(csq)+1);
+    char* command2 = malloc(strlen(creg)+1);
+    char* command3 = malloc(strlen(cops)+1);
+
+    snprintf(command1, strlen(csq), "%s", csq);
+    snprintf(command2, strlen(creg), "%s", creg);
+    snprintf(command3, strlen(cops), "%s", cops);
+
+    char** commands = malloc(sizeof(command1)*2 + 1);
+    commands[0] = command1; commands[1] = command2; commands[2] = command3; commands[3] = NULL;
+    
+    return commands;
 }
 
 char* at_send_AT(){
@@ -296,7 +344,7 @@ int at_process_command(const char* command, char** output){
 	char *s, *param1 = NULL, *param2 = NULL, *param3 = NULL, *param4 = NULL;
 	int i = 0;
     //TODO completa comandi
-	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG } cmd = CMD_NONE;
+	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK } cmd = CMD_NONE;
 
 	printf("AT: process command: '%s'\n", command);
 
@@ -315,6 +363,8 @@ int at_process_command(const char* command, char** output){
 				cmd = CMD_CALL_MAKE;
 			} else if(!strcmp(s, "hang")) {
 				cmd = CMD_CALL_HANG;
+            } else if (!strcmp(s, "network")) {
+                cmd = NETWORK;
             }
 		} else if(i == 1) {
 			param1 = s;
@@ -381,7 +431,7 @@ int at_process_command(const char* command, char** output){
                         char** _cmd_list = at_set_text_mode();
                         cmd_list = _cmd_list;
                         while (_cmd_list != NULL){
-                            at_send_command(*_cmd_list, output);
+                            at_send_command(*_cmd_list, NULL);
                             _cmd_list++;
                         }
                         at_send_command(cmd_str = text_api.create(param2, param3), output);
@@ -404,13 +454,36 @@ int at_process_command(const char* command, char** output){
                     }
                 }
             }
-            
-
             return -1;
-            
+        case NETWORK:
+            char** _output = malloc(3*sizeof(char*));
+            char** output_start = _output;
+            char** _cmd_list = at_check_network_status();
+            cmd_list = _cmd_list;
+            while (_cmd_list != NULL){
+                at_send_command(*_cmd_list, _output);
+                _cmd_list++;
+                _output++;
+            }
+            _output = output_start;
+            int total_copied = 0;
+            *output = malloc(250);
+            for (int i=0; i < 3; i++){
+                memcpy(*output + total_copied, *_output, strlen(*_output));
+                int copied = strlen(*_output);
+                (*output)[total_copied + copied] = '\n';
+                total_copied += (copied+1);
+                _output++;
+            }
+            (*output)[total_copied] = '\0';
+            break;
 	}
 
     free(cmd_str); 
-    free(cmd_list); 
+    while(cmd_list != NULL){
+        free(*cmd_list);
+        cmd_list++;
+    }
+    
 	return 0;  /* AT handled command */
 }

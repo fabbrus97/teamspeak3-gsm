@@ -64,6 +64,6 @@ void load_variables(){
 	
 	iniparser_freedict(ini);
 
-    // printf("[DEBUG] ts ip to bind is ini/env/final: %s/%s/%s\n", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
+    printf("[DEBUG] ts ip to bind is ini/env/final: %s/%s/%s\n", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
 
 }

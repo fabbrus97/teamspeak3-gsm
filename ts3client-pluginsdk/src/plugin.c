@@ -143,7 +143,7 @@ int ts3plugin_init() {
 	load_variables();
 
 	// 1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  //TODO check se la seconda frequenza dev'essere 8000 o 48000
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  
 		printf("Error registering playback device\n");
 		exit(1);
 	}
@@ -308,7 +308,6 @@ void* main_loop_play(void* args){
 
 			// printf("\n");
 			// printf("CONVERSION OK 💥💥💥\n");
-			//TODO prova a commentare comando sopra per convertire, e manda audio a 48khz S16LE
 			//NOTA S16LE richiede comunque una conversione (perche' da udp ricevi un byte alla volta,
 			// devi leggerne due consecutivi e accorparli)
 			// (*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", audio_buffer, receivedBytes);
@@ -365,7 +364,7 @@ void* main_loop_acquire(void* args){
 	for(;;){
 		// printf("DEBUG another loop bites the dust %i\n", i);
 		// usleep(20*1000); // sleep 30 ms
-		//TODO // usleep(time2sleep); // sleep playbackBufferSize/frequency * 1000000 seconds (frequency is 48000, 1000000 is one second in nanoseconds used by usleep)
+		// usleep(time2sleep); // sleep playbackBufferSize/frequency * 1000000 seconds (frequency is 48000, 1000000 is one second in nanoseconds used by usleep)
 		// pthread_t         self;
 		// self = pthread_self();
 		// printf("my thread id is %i\n", self);
@@ -436,7 +435,7 @@ void* main_loop_play_old(void* arg)
 	/*
 		https://www.geeksforgeeks.org/use-posix-semaphores-c/
 
-		TODO ci sono delle variabili da osservare:
+		ci sono delle variabili da osservare:
 			- buffer dei messaggi
 			- buffer delle chiamate
 		può convenire fare due thread
@@ -1035,6 +1034,8 @@ uint8_t TESTSRCBUFFER[] = {126,125,125,123,124,124,123,123,123,122,123,121,121,1
 
 void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int newStatus, unsigned int errorNumber) {
     /* Some example code following to show how to use the information query functions. */
+
+	printf("[DEBUG] IMPORTANT!!! THE IP OF UCONTR IS %s\n", ts_ip_bind);
 
     if(newStatus == STATUS_CONNECTION_ESTABLISHED) {  /* connection established and we have client and channels available */
 
