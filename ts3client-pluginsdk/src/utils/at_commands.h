@@ -1,8 +1,3 @@
-/*
-    Reference for the commands:
-    https://cdn-shop.adafruit.com/datasheets/sim800_series_at_command_manual_v1.01.pdf
-*/
-
 #ifndef AT_COMMANDS_H 
 #define AT_COMMANDS_H
 
@@ -58,7 +53,7 @@ char* at_answer_phonebook_only(int flag);
 char** at_set_text_mode(); 
 
 //network
-char* at_check_network_status();
+char** at_check_network_status();
 
 //AT
 char* at_send_AT();
