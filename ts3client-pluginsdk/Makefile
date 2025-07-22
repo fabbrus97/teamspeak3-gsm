@@ -10,7 +10,7 @@ all: config test_plugin
 
 config:
 	mkdir -p $(CONFIG_PATH)
-	if [ ! -f $(CONFIG_PATH) ]; then cp settins.ini $(CONFIG_PATH)/ ; fi
+	if [ ! -f $(CONFIG_PATH) ]; then cp settings.ini $(CONFIG_PATH)/ ; fi
 
 test_plugin: server.o plugin.o at_commands.o settings.o
 	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o -lsoxr -liniparser

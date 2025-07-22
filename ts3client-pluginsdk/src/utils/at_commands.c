@@ -145,10 +145,10 @@ char* at_text_delete(int index, char* flag){
     return result;
 } 
 
-char* at_call_make(char* name){
+char* at_call_make(char* number){
     char* buffer = malloc(40);  // allocate memory on the heap
     if (buffer != NULL) {
-        snprintf(buffer, 40, "ATD%s;\n", name);
+        snprintf(buffer, 40, "ATD%s;\n", number);
     }
     return buffer;
     
@@ -160,30 +160,42 @@ char* at_call_hang(){
     return buffer;
 }
 
-char* at_call_accept(){
-    char* buffer = malloc(5);
-    strcpy(buffer, "ATA\n");
+// char* at_call_accept(){
+//     char* buffer = malloc(5);
+//     strcpy(buffer, "ATA\n");
+//     return buffer;
+// }
+
+// char* at_call_wait(){
+//     char* buffer = malloc(15);
+//     strcpy(buffer, "AT+CCWA=1,1,1\n");
+
+// }
+
+// char* at_call_merge(){
+//     return NULL;
+//     // AT+CHLD=2
+// }
+
+// char* at_can_call(int flag){
+//     return NULL;
+// }
+
+// char* at_can_text(int flag){
+//     return NULL;
+// }
+
+// TODO se esp32 viene spento, si perde l'impostazione; va salvata dal server di ts e esp32 all'avvio deve chiedere le impostazioni al server
+char* at_answer_phonebook_only(int flag){
+    char* buffer = malloc(11);
+    snprintf(buffer, 11, "PB_ONLY=%i\n", flag);
     return buffer;
 }
 
-char* at_call_wait(){
-    return NULL;
-}
-
-char* at_call_merge(){
-    return NULL;
-}
-
-char* at_can_call(int flag){
-    return NULL;
-}
-
-char* at_can_text(int flag){
-    return NULL;
-}
-
-char* at_answer_phonebook_only(int flag){
-    return NULL;
+char* at_get_own_number(){
+    char* buffer = malloc(9);
+    strcpy(buffer, "AT+CNUM\n");
+    return buffer;
 }
 
 char** at_set_text_mode(){
@@ -339,12 +351,20 @@ void at_init(char* server, int port){
     }
 }
 
+char* at_help(){
+    char* buffer = malloc(700);
+    FILE* helptext = fopen("at_help.txt", "r");
+    fread(buffer, 700, sizeof(char), helptext);
+    fclose(helptext);
+    return buffer;
+    
+}
+
 int at_process_command(const char* command, char** output){
 	char buf[TCP_BUFFER];
 	char *s, *param1 = NULL, *param2 = NULL, *param3 = NULL, *param4 = NULL;
 	int i = 0;
-    //TODO completa comandi
-	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK } cmd = CMD_NONE;
+	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK, PHONEBOOK_MODE, OWN_NUMBER, HELP } cmd = CMD_NONE;
 
 	printf("AT: process command: '%s'\n", command);
 
@@ -365,6 +385,12 @@ int at_process_command(const char* command, char** output){
 				cmd = CMD_CALL_HANG;
             } else if (!strcmp(s, "network")) {
                 cmd = NETWORK;
+            } else if (!strcmp(s, "pb_mode")) {
+                cmd = PHONEBOOK_MODE;
+            } else if (!strcmp(s, "mynumber")) {
+                cmd = OWN_NUMBER;
+            } else if (!strcmp(s, "help")){
+                cmd = HELP;
             }
 		} else if(i == 1) {
 			param1 = s;
@@ -477,6 +503,28 @@ int at_process_command(const char* command, char** output){
             }
             (*output)[total_copied] = '\0';
             break;
+        case CMD_CALL_MAKE:
+        if (param1){
+            at_send_command(at_call_make(param1), NULL);
+            break;
+        }
+        return -1;
+        case CMD_CALL_HANG:
+            at_send_command(at_call_hang(), NULL);
+            break;
+        case PHONEBOOK_MODE:
+            if (param1){
+                int flag = 1; //by defaults it's true, i.e. answers only to numbers in the phonebook
+                flag = !strcmp(param1, "false") ? 0 : flag;
+                at_send_command(at_answer_phonebook_only(flag), NULL);
+                break;
+            }
+            return -1;
+        case OWN_NUMBER:
+            at_send_command(at_get_own_number(), output);
+            break;
+        case HELP:
+            *output = at_help();
 	}
 
     free(cmd_str); 

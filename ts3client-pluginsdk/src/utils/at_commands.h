@@ -43,9 +43,9 @@ char* at_call_merge();
 
 //settings apis
 /* set wether calls are possible - e.g. if my plan is consumption-based, I don't want to make calls, only receive them */
-char* at_can_call(int flag);
+// char* at_can_call(int flag);
 /* set wether texts are possible - e.g. if my plan is consumption-based, I don't want to send texts, only receive them */
-char* at_can_text(int flag);
+// char* at_can_text(int flag);
 /* set wether answer calls only from numbers in the phonebook */
 char* at_answer_phonebook_only(int flag);
 //TODO blacklist?
@@ -60,7 +60,7 @@ char* at_send_AT();
 
 int at_send_command(char* command, char** output);
 
-char* get_own_number();
+char* at_get_own_number();
 
 char* at_help();  
 
