@@ -1,0 +1,11 @@
+phonebook <create|read|delete> <params>: if "create", params are [index], <name> and <number>
+					 if "read", params are <index1>, <index2>
+					 if "delete", params is [index]
+text: <send|read|delete> <params>: if "send", params are <number> and <text>
+				     if "read", param is <index>
+				     if "delete", params are <index> and [flag]; if flag is "read", deletes all read messages; if flag is "all", deletes all messages
+hang: hangs the calls
+network: shows stats about the network
+pb_mode [true|false]: if false, accept any call; otherwise, accepts only if the number is saved in the phonebook
+mynumber: shows my number
+help: displays this help

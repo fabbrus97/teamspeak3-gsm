@@ -48,6 +48,34 @@ int did_play = -1;
 int answer_len=0; //to read answer to commands sent to gsm modem
 
 void ARDUINO_ISR_ATTR timer_callback() {
+
+  if (call_in_progress){ //TODO non funziona, prende solo un sacco di rumore; controlla quello che arriva da internet
+    portENTER_CRITICAL_ISR(&timerMux);
+
+    // if ((audio_buffer_pos > played_audio_pos && (audio_buffer_pos - played_audio_pos > buf_sz/2)) ||
+    if ((audio_buffer_pos != played_audio_pos )
+        // (played_audio_pos > audio_buffer_pos && (buf_sz - played_audio_pos + audio_buffer_pos > buf_sz/2))
+    ){
+
+      portEXIT_CRITICAL_ISR(&timerMux);
+
+      ledcWrite(AUDIOPIN_OUT, (uint8_t)(audio_buffer[played_audio_pos]));
+
+      audio_buffer[played_audio_pos] = 0;
+
+      played_audio_pos++;
+      played_audio_pos = played_audio_pos % buf_sz;
+
+    } else {
+      portEXIT_CRITICAL_ISR(&timerMux);
+    }
+  }
+
+  /********/
+
+  // ledcWrite(AUDIOPIN_OUT, (audio_data[wolverine_pos++]));
+  // wolverine_pos = wolverine_pos%sizeof(audio_data);
+
   //get audio to send
   // if (audio2send_pos_w <= audio2send_sent + max_audio2send*4){
   // if (available2write > 0){
@@ -56,73 +84,13 @@ void ARDUINO_ISR_ATTR timer_callback() {
   //if we are in a call
   if (call_in_progress)  {
     portENTER_CRITICAL_ISR(&timerMuxS);
-    // if (audio2send_pos_w < audio2send_buffer_sz){
-    // if (1){
-      //if (collect_pos < 10){
-      // }
-      
-
       audio2send_buffer[audio2send_pos_w++] = adc1_get_raw(ADC1_CHANNEL_0)/16; //(analogRead(AUDIOPIN_IN));
       audio2send_pos_w %= audio2send_buffer_sz;
-    
-    // }
-    // audio2send_buffer[audio2send_pos_w++] = audio_data[wolverine_pos++]; audio2send_pos_w %= audio2send_buffer_sz;
     portEXIT_CRITICAL_ISR(&timerMuxS);
 
-    // wolverine_pos %= sizeof(audio_data);
-
-
-
-
-
-
-    //NOTE should we decrement available2write after writing?
-    // available2write--;
   }
 
-  /********/
-
-  // if (played_audio_pos < audio_buffer_pos){
-  // int diff = audio_buffer_pos - played_audio_pos;
-  // diff = diff > 0 ? diff : audio_buffer_pos - diff;
-  // if (available2play >= 1024){
-  /* TODO uncomment from here */
-  // if (played_audio_pos < buf_sz){
-  // did_play = 1;
-  // if (audio_buffer_pos > played_audio_pos || (audio_buffer_pos + 512 < played_audio_pos )){
-  // printf("[DEBUG][PLAYING] %i/%i\n", played_audio_pos, buf_sz);
-  // pwm_out.pulse_perc((((uint8_t)(audio_buffer[played_audio_pos++]))/255.0f) * 100);
-
-  portENTER_CRITICAL_ISR(&timerMux);
-
-  // if ((audio_buffer_pos > played_audio_pos && (audio_buffer_pos - played_audio_pos > buf_sz/2)) ||
-  if ((audio_buffer_pos != played_audio_pos )
-      // (played_audio_pos > audio_buffer_pos && (buf_sz - played_audio_pos + audio_buffer_pos > buf_sz/2))
-   ){
-    portEXIT_CRITICAL_ISR(&timerMux);
-
-    ledcWrite(AUDIOPIN_OUT, (uint8_t)(audio_buffer[played_audio_pos]));
-
-    audio_buffer[played_audio_pos] = 0;
-
-    played_audio_pos++;
-    played_audio_pos = played_audio_pos % buf_sz;
-
-  } else {
-    portEXIT_CRITICAL_ISR(&timerMux);
-  }
-
-  // Give a semaphore that we can check in the loop
-  // xSemaphoreGiveFromISR(timerSemaphore, NULL);
-
-  // audio_buffer[played_audio_pos-1]=0;
-  // }
-  // else {
-  //   did_play = 0;
-  // }
-
-  // ledcWrite(AUDIOPIN_OUT, (audio_data[wolverine_pos++]));
-  // wolverine_pos = wolverine_pos%sizeof(audio_data);
+  
 }
 
 /*************************************/
@@ -149,7 +117,7 @@ void setup() {
   // Connect to Wi-Fi network
   // Set static IP configuration
   Serial.println("Configuring WiFi... TODO uncomment");
-  // WiFi.config(staticIP, gateway, subnet);
+  WiFi.config(staticIP, gateway, subnet);
   Serial.println("Connecting to WiFi...");
   WiFi.begin(ssid, password);
 
@@ -275,7 +243,6 @@ void taskloop(void * parameter){
     }
 
 
-
     /*serial_buffer_pos = 0;
     // check data from internet
     int len = 0;
@@ -348,6 +315,7 @@ void taskloop(void * parameter){
       Serial.print(c);
       Serial2.write(c);
     }
+
   }
 }
 

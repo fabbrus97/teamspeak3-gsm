@@ -29,6 +29,8 @@ int start_udp_socket(){
     }
     printf("Socket created successfully\n");
 
+    printf("[DEBUG] LISTENING ON PORT %i ON ADDRESS %s\n", ts_audio_port, ts_ip_bind);
+
     // Set port and IP:
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(ts_audio_port);

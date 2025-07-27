@@ -35,8 +35,12 @@ void parse_serial(char* str){
   
   if (strncmp("RING", str, 4) == 0){
     if ((ACCEPT_ONLY_PB && check_caller_in_pb(str)) || !ACCEPT_ONLY_PB){
-      Serial2.write("ATA\n");
-      call_in_progress = 1;
+      if (call_in_progress){
+        Serial2.write("AT+CHLD=2");
+      } else {
+        Serial2.write("ATA\n");
+        call_in_progress = 1;
+      }
     }
   }
 
