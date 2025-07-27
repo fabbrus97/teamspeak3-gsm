@@ -44,25 +44,43 @@ char* at_phonebook_delete(char* index){
     return result;
 }
 
-void utf8_to_ucs2_encoder(char* src, char* output){
+void utf8_to_ucs2_encoder(char* src, char** output){
     //change encoding
     size_t bufsize = strlen(src);
+    size_t usc2_len = bufsize * 2; // Worst case
     iconv_t cd = iconv_open("UCS-2BE", "UTF-8");
-    size_t out_len = bufsize * 2; // Worst case
-    char* ucs2_str = malloc(out_len); memset(ucs2_str, 0, out_len);
+    if ((int) cd == -1) {
+	/* Initialization failure. */
+	if (errno == EINVAL) {
+	    fprintf (stderr,
+		     "Conversion from '%s' to '%s' is not supported.\n",
+		     "UCS-2BE", "UTF-8");
+	}
+	else {
+	    fprintf (stderr, "Initialization failure: %s\n",
+		     strerror (errno));
+	}
+	// exit ok
+	exit (1);
+    }
+    char* ucs2_str = malloc(usc2_len); memset(ucs2_str, 0, usc2_len);
+    char* inptr = src;
+    char* outptr = ucs2_str;
+    size_t _bufsize = bufsize;
+    size_t _usc2_len = usc2_len;
     
-    iconv(cd, &src, &bufsize, &ucs2_str, &out_len);
+    size_t irr_converted = iconv(cd, &inptr, &_bufsize, &outptr, &_usc2_len);
     iconv_close(cd);
 
     // converting to hex string
-    size_t ucs2_len = (&out_len) - (size_t)ucs2_str; // pointer arithmetic
-    char* hex_str = malloc(ucs2_len * 2 + 1);
-        for (size_t i = 0; i < ucs2_len; ++i) {
-        sprintf(hex_str + i * 2, "%02X", (unsigned char)ucs2_str[i]);
+    size_t written_bytes = usc2_len - _usc2_len; //written bytes
+    *output = malloc(written_bytes*2+1); // + null terminator
+    for (size_t i = 0; i < written_bytes; i++) {
+        sprintf(*output + i * 2, "%02X", (unsigned char)ucs2_str[i]);
     }
-    hex_str[ucs2_len * 2] = '\0';
+    output[written_bytes*2] = '\0';
     free(ucs2_str);
-    output = hex_str;
+    // *output = hex_str;
 }
 
 /*
@@ -71,16 +89,19 @@ void utf8_to_ucs2_encoder(char* src, char* output){
     toda: type of address (145 or 129)
 */
 char* at_text_create(char* dest, char* text){
-     
-    size_t bufsize = 1024; 
-    char* result = malloc(bufsize);
+    //FIXME credo che se il messaggio sia troppo corto, il carattere 0x1A venga stampato prima di > e questo faccia fallire tutto
+    //TODO prova a dividere in 2 comandi, uno per mandare il numero di telefono e il secondo per mandare il testo vero e proprio
     
     /* 
     * converting to usc2 encoding to support emojis 😍😍😍 
     */
-    char* hex_dest, hex_text; 
-    utf8_to_ucs2_encoder(dest, hex_dest);    
-    utf8_to_ucs2_encoder(text, hex_text);    
+    char *hex_dest, *hex_text; 
+    utf8_to_ucs2_encoder(dest, &hex_dest);    
+    utf8_to_ucs2_encoder(text, &hex_text);    
+
+
+    size_t bufsize = strlen(hex_dest) + strlen(hex_text) + 20;
+    char* result = malloc(bufsize);
 
     snprintf(result, bufsize, "AT+CMGS=\"%s\"\r%s%c", hex_dest, hex_text, 0x1A);
 
@@ -100,12 +121,12 @@ char* at_text_create(char* dest, char* text){
         ALL: all
     AT+CMGR=<index> read sms
 */
-char* at_text_read(int index, char* mode){
+char* at_text_read(char* index, char* mode){
      
     size_t bufsize = 50;
-    char* result = (char*)malloc(bufsize);
+    char* result = malloc(bufsize);
     if (index != NULL)
-        snprintf(result, bufsize, "AT+CMGR=%i", index);
+        snprintf(result, bufsize, "AT+CMGR=%s", index);
     else {
         if(strcmp(mode, "sent") == 0){
             snprintf(result, bufsize, "AT+CMGL=%s", "STO SENT");
@@ -128,7 +149,7 @@ char* at_text_read(int index, char* mode){
         3: delete read, sent and saved (unsent) messages; 
         4: delete all messages (even unread)
 */ 
-char* at_text_delete(int index, char* flag){
+char* at_text_delete(char* index, char* flag){
     
     int delflag = 0;
     if (flag != NULL && strcmp(flag, "read") == 0){
@@ -140,7 +161,7 @@ char* at_text_delete(int index, char* flag){
 
     size_t maxlen = 25;
     char* result = malloc(maxlen);
-    snprintf(result, maxlen, "AT+CMGD=%i,%i", index, delflag);
+    snprintf(result, maxlen, "AT+CMGD=%s,%i", index, delflag);
             
     return result;
 } 
@@ -203,9 +224,11 @@ char** at_set_text_mode(){
     char* encoding = "AT+CSCS=\"UCS2\"";
     char* command1 = malloc(strlen(textmode)+1);
     char* command2 = malloc(strlen(encoding)+1);
-    snprintf(command1, strlen(textmode), "%s", textmode);
-    snprintf(command2, strlen(encoding), "%s", encoding);
-    char** commands = malloc(sizeof(command1)*2+1);
+    // snprintf(command1, strlen(textmode) + 1, "%s", textmode);
+    // snprintf(command2, strlen(encoding) + 1, "%s", encoding);
+    strcpy(command1, textmode);
+    strcpy(command2, encoding);
+    char** commands = malloc(sizeof(char*)*3);
     commands[0] = command1; commands[1] = command2; commands[2] = NULL;
     return commands;
 } 
@@ -357,7 +380,6 @@ char* at_help(){
     fread(buffer, 700, sizeof(char), helptext);
     fclose(helptext);
     return buffer;
-    
 }
 
 int at_process_command(const char* command, char** output){
@@ -401,11 +423,15 @@ int at_process_command(const char* command, char** output){
 		} else {
 			param4 = s;
 		}
-		s = strtok(NULL, " ");
+        if (cmd == CMD_TEXT && (param1 != NULL && strcmp(param1, "send")==0) && param2 != NULL){
+            param3 = command + strlen("text") + 1 + strlen(param1) + 2 + strlen(param2); 
+            break;
+        }
+        s = strtok(NULL, " ");
 		i++;
 	}
 
-    char* cmd_str; char** cmd_list;
+    char* cmd_str = NULL; char** cmd_list = NULL;
 	switch(cmd) {
 		case CMD_NONE:
 			return 1;  /* Command not handled by at */
@@ -456,10 +482,11 @@ int at_process_command(const char* command, char** output){
                         
                         char** _cmd_list = at_set_text_mode();
                         cmd_list = _cmd_list;
-                        while (_cmd_list != NULL){
-                            at_send_command(*_cmd_list, NULL);
+                        while (*_cmd_list != NULL){
+                            at_send_command(*_cmd_list, NULL); 
                             _cmd_list++;
                         }
+                        // free(cmd_str);
                         at_send_command(cmd_str = text_api.create(param2, param3), output);
                         break;
                     }
@@ -482,6 +509,7 @@ int at_process_command(const char* command, char** output){
             }
             return -1;
         case NETWORK:
+            
             char** _output = malloc(3*sizeof(char*));
             char** output_start = _output;
             char** _cmd_list = at_check_network_status();
@@ -504,15 +532,21 @@ int at_process_command(const char* command, char** output){
             (*output)[total_copied] = '\0';
             break;
         case CMD_CALL_MAKE:
-        if (param1){
-            at_send_command(at_call_make(param1), NULL);
-            break;
-        }
-        return -1;
+            
+            
+            if (param1){
+                at_send_command(at_call_make(param1), NULL);
+                break;
+            }
+            return -1;
         case CMD_CALL_HANG:
+            
+            
             at_send_command(at_call_hang(), NULL);
             break;
         case PHONEBOOK_MODE:
+            
+            
             if (param1){
                 int flag = 1; //by defaults it's true, i.e. answers only to numbers in the phonebook
                 flag = !strcmp(param1, "false") ? 0 : flag;
@@ -521,17 +555,27 @@ int at_process_command(const char* command, char** output){
             }
             return -1;
         case OWN_NUMBER:
+            
+            
             at_send_command(at_get_own_number(), output);
             break;
         case HELP:
+            
+            
             *output = at_help();
+            break;
 	}
 
-    free(cmd_str); 
-    while(cmd_list != NULL){
+    if (cmd_str != NULL)
+        free(cmd_str); 
+    
+    char** original_cmd_list = cmd_list;  // Save original pointer
+    while (cmd_list != NULL && *cmd_list != NULL) {
         free(*cmd_list);
         cmd_list++;
     }
-    
+
+    if(original_cmd_list != NULL)
+        free(original_cmd_list);  // Free the whole array of char*    
 	return 0;  /* AT handled command */
 }

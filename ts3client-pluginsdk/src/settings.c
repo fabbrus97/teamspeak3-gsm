@@ -6,6 +6,13 @@
 
 #include "settings.h"
 
+char* channel_to_connect;
+int ts_audio_port; 
+char* ucontroller_address;
+char* ucontroller_cmd_port;
+char* ts_ip_bind;
+int ucontroller_audio_port; 
+
 void load_variables(){
 
 	//first check the ini file
@@ -18,9 +25,10 @@ void load_variables(){
 	dictionary  *   ini ;
 	char* ini_channel;
 	char* ini_ucontroller_ip;
-	int ini_ucontroller_at_port; //port where to send commands
+	int   ini_ucontroller_at_port; //port where to send commands
     char* ini_ts_ip_bind; //ip to bind the ts plugin to; defaults to 0.0.0.0
     int   ini_ucontroller_audio_port; //this is the port where ucontroller will receive audio; defaults to 7000
+	int   ini_ts_audio_port; //this is the port where ts will receive audio; defaults to 8000
 
 	ini = iniparser_load(fullpath);
     if (ini==NULL) {
@@ -39,8 +47,9 @@ void load_variables(){
 	ini_channel = iniparser_getstring(ini, "ts:channel", "default");
 	ini_ucontroller_ip = iniparser_getstring(ini, "ucontroller:ip", "127.0.0.1");
 	ini_ucontroller_at_port = iniparser_getint(ini, "ucontroller:at_port", 8001);
-    ini_ts_ip_bind = iniparser_getstring(ini, "ucontroller:ip", "0.0.0.0");
+    ini_ts_ip_bind = iniparser_getstring(ini, "ts:ip", "0.0.0.0");
     ini_ucontroller_audio_port = iniparser_getint(ini, "ucontroller:at_port", 7000);
+    ini_ts_audio_port = iniparser_getint(ini, "ts:audio_port", 8000);
 
 
 	//then check env variables
@@ -49,10 +58,12 @@ void load_variables(){
 	const int env_ucontroller_at_port = getenv("TSGSM_UC_ATPORT"); 
     const char* env_ts_ip_bind = getenv("TSGSM_TS_BIND");
     const int env_ucontroller_audio_port = getenv("TSGSM_UC_AUDIOPORT");
+    const int env_ts_audio_port = getenv("TSGSM_TS_AUDIOPORT");
 
 
 	ucontroller_cmd_port = env_ucontroller_at_port == NULL ? ini_ucontroller_at_port : atoi(env_ucontroller_at_port); 
     ucontroller_audio_port = env_ucontroller_audio_port == NULL ? ini_ucontroller_audio_port : atoi(env_ucontroller_audio_port); 
+    ts_audio_port = env_ts_audio_port == NULL ? ini_ts_audio_port : atoi(env_ts_audio_port); 
 
     ts_ip_bind = malloc(17); 
 	channel_to_connect = malloc(17);

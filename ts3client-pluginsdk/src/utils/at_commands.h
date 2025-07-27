@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <iconv.h>
+#include <errno.h>
 
 #include "../settings.h"
 
@@ -32,8 +33,8 @@ char* at_phonebook_delete(char* index);
 //texts apis
 // CrudAPI text_api;
 char* at_text_create(char* dest, char* text);
-char* at_text_read(int index, char* mode);
-char* at_text_delete(int index, char* flag);
+char* at_text_read(char* index, char* mode);
+char* at_text_delete(char* index, char* flag);
 
 //call apis
 char* at_call_make(char* name);

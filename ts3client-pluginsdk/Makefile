@@ -5,7 +5,7 @@
 OUTPUT = "${HOME}/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so"
 # CFLAGS = -c -O2 -Wall -fPIC
 CFLAGS = -c -g -O0 -fPIC -Wall # -w
-CONFIG_PATH = "~/.config/teamspeak-gsm"
+CONFIG_PATH = "${HOME}/.config/teamspeak-gsm"
 all: config test_plugin
 
 config:
