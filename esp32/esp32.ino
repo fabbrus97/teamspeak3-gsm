@@ -463,6 +463,7 @@ void loop() {
   //get audio data
   if (call_in_progress){
     // play_wolverine();
+
     int new_audio_len = get_audio_data(bufferloop);
     // printf("[DEBUG] got %i byets of audio data\n", new_audio_len);
     // portENTER_CRITICAL_ISR(&new_audioMuxS);

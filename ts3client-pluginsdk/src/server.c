@@ -141,6 +141,7 @@ int send_voice(short* samples, int sample_counter, int channels){
     memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
     test_client_addr.sin_family = AF_INET; // IPv4
     test_client_addr.sin_port = htons(ucontroller_audio_port); // Port in network byte order
+    printf("[DEBUG] SENDING AUDIO TO %s:%i\n", ucontroller_address, ucontroller_audio_port);
     inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
 
     // if (client_addr == NULL) TODO

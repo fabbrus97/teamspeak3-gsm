@@ -48,7 +48,7 @@ void load_variables(){
 	ini_ucontroller_ip = iniparser_getstring(ini, "ucontroller:ip", "127.0.0.1");
 	ini_ucontroller_at_port = iniparser_getint(ini, "ucontroller:at_port", 8001);
     ini_ts_ip_bind = iniparser_getstring(ini, "ts:ip", "0.0.0.0");
-    ini_ucontroller_audio_port = iniparser_getint(ini, "ucontroller:at_port", 7000);
+    ini_ucontroller_audio_port = iniparser_getint(ini, "ucontroller:audio_port", 7000);
     ini_ts_audio_port = iniparser_getint(ini, "ts:audio_port", 8000);
 
 
