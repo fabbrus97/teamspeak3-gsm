@@ -143,7 +143,7 @@ int ts3plugin_init() {
 	load_variables();
 
 	// 1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){  
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){
 		printf("Error registering playback device\n");
 		exit(1);
 	}
@@ -161,6 +161,34 @@ int ts3plugin_init() {
 
 	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
     // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
+
+	// connect to server
+// 	char** identity;
+// 	// ts3client_createIdentity(identity);
+// 	ts3Functions.createIdentity(identity);
+
+// 	uint64 serverConnectionHandlerID = ts3client_spawnNewServerConnectionHandler();
+
+// 	char* defaultChannels[] = { "test channel pwd=pwd", NULL };
+
+// 	ts3client_startConnection(serverConnectionHandlerID,
+// 		identity,
+// 		"localhost", //server ip
+// 		9987, //server port; 9987 is the default
+// 		"GSMBOT", //nickname
+// 		defaultChannels,
+// 		"pwd", //channel password
+// 		""); //server password
+
+// 	//connect to channel
+// // 	ts3client_startConnectionWithChannelID(	serverConnectionHandlerID, 	�
+// // �	identity, 	�
+// // �	ip, 	�
+// // �	port, 	�
+// // �	nickname, 	�
+// // �	defaultChannelId, 	�
+// // �	defaultChannelPassword, 	�
+// // �	serverPassword);	�
 
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
@@ -345,6 +373,19 @@ void* main_loop_play(void* args){
 
 }
 
+void crash_handler(int sig) {
+    printf("Caught signal %d, cleaning up before exit...\n", sig);
+    // Optional: Log to file
+    exit(1);  // Clean exit prevents crash window
+}
+
+void setup_crash_handling() {
+    signal(SIGSEGV, crash_handler);
+    signal(SIGILL,  crash_handler);
+    signal(SIGFPE,  crash_handler);
+    signal(SIGABRT, crash_handler);
+}
+
 //acquire data from ts client, not from esp32!
 void* main_loop_acquire(void* args){
 
@@ -372,7 +413,7 @@ void* main_loop_acquire(void* args){
 		receivedBytes = receive_data(&mybuffer);
 
 
-		
+
 		while (1){
 			sem_wait(&c_pb_sem);
 			if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
@@ -391,7 +432,7 @@ void* main_loop_acquire(void* args){
 		bytes2write = audio_buffer_size - audio_buffer_pos;
 		bytes2write = bytes2write > receivedBytes ? receivedBytes : bytes2write;
 
-		printf("[W_INFO] writing audio to %i - %i\n", audio_buffer_pos, audio_buffer_pos+bytes2write);
+		// printf("[W_INFO] writing audio to %i - %i\n", audio_buffer_pos, audio_buffer_pos+bytes2write);
 
 		// while ((audio_buffer_pos < audio_buffer_played && ((audio_buffer_pos + bytes2write) >= audio_buffer_played)) ){
 		// 	usleep(100);
@@ -415,7 +456,7 @@ void* main_loop_acquire(void* args){
 		sem_post(&c_pb_sem);
 			// printf("[SEM_V] Data written\n");
 
-			
+
 		// free(&mybuffer); //TODO memory leak!
 
 
@@ -735,7 +776,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 				snprintf(msg, sizeof(msg), "Channel Connect Info: %s", path);
 				ts3Functions.printMessageToCurrentTab(msg);
 				ts3Functions.requestSendChannelTextMsg(
-					serverConnectionHandlerID, 
+					serverConnectionHandlerID,
 					msg,
 					myChannelID,
 					NULL
@@ -743,7 +784,7 @@ int ts3plugin_processCommand(uint64 serverConnectionHandlerID, const char* comma
 			} else {
 				ts3Functions.printMessageToCurrentTab("No channel connect info available.");
 				ts3Functions.requestSendChannelTextMsg(
-					serverConnectionHandlerID, 
+					serverConnectionHandlerID,
 					"No channel connect info available.",
 					myChannelID,
 					NULL
@@ -1180,7 +1221,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 		// pthread_create(&t1, NULL, main_loop_play, NULL);
 		pthread_create(&t1, NULL, main_loop_play, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
 		pthread_create(&t2, NULL, main_loop_acquire, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
-		
+
 
 		//INIT MY AT COMMANDS LIBRARY
 		at_init(NULL, NULL);
@@ -1300,9 +1341,9 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 				ts3Functions.logMessage("Error querying channel ID", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
 			}
 			// printf("[DEBUG] got channel id: %li and serverConnHandlID %li\n", myChannelID, serverConnectionHandlerID);
-			
+
 			ts3Functions.requestSendChannelTextMsg(
-				serverConnectionHandlerID, 
+				serverConnectionHandlerID,
 				output,
 				myChannelID,
 				NULL
@@ -1312,7 +1353,7 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 			printf("[DEUBG] at_output is %i\n", at_output);
 			return at_output;
 		}
-		
+
 	} else {
 		printf("[DEBUG] message/keyword/kw/cmp: %s/%s/%i\n", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
 	}
