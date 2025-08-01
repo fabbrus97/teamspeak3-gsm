@@ -24,8 +24,9 @@ void TSinit(){
 
 int get_audio_data(char* data){
   int packetSize = udp.parsePacket();
+  // printf("Received %d bytes from %s, port %d\n", packetSize, udp.remoteIP().toString().c_str(), udp.remotePort());
   if (packetSize) {
-    // printf("Received %d bytes from %s, port %d\n", packetSize, udp.remoteIP().toString().c_str(), udp.remotePort());
+    
     
     int len = udp.read(packetBuffer, UDP_READ);
     if (len > 0) {
