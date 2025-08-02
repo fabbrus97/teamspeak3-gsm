@@ -79,6 +79,8 @@ RUN apt update && apt install -y \
 
 RUN apt-get update && apt-get install -y xserver-xorg xserver-xorg-video-dummy
 
+RUN apt update && apt install -y pulseaudio
+
 # RUN apt-get update && apt-get install -y \
 #     libgl1-mesa-glx libgl1-mesa-dri \
 #     libdbus-1-3 libfontconfig1 libfreetype6 libxcomposite1 libxcursor1 libxdamage1 libxinerama1 libxss1 
@@ -98,7 +100,7 @@ RUN make
 
 # audio and dbus setup
 RUN dbus-uuidgen > /etc/machine-id
-RUN apt update && apt install -y pulseaudio
+
 
 
 #CMD ["Xvfb", ":99", "-screen", "0", "640x480x8", "-nolisten", "tcp"]
