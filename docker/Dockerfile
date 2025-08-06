@@ -80,6 +80,7 @@ RUN apt update && apt install -y \
 RUN apt-get update && apt-get install -y xserver-xorg xserver-xorg-video-dummy
 
 RUN apt update && apt install -y pulseaudio
+RUN apt-get update && apt-get install -y libc++abi1
 
 # RUN apt-get update && apt-get install -y \
 #     libgl1-mesa-glx libgl1-mesa-dri \
