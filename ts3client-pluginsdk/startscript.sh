@@ -20,7 +20,9 @@ done
 # Start Xorg in the background
 Xorg :99 -noreset +extension GLX +extension RANDR +extension RENDER -logfile /tmp/xorg.log -config /etc/X11/xorg.conf &
 
- Wait for X to be ready
+export DISPLAY=:99 
+
+# Wait for X to be ready
 for i in {1..20}; do
   if xdpyinfo -display :99 > /dev/null 2>&1; then break; fi
   echo "Waiting for Xorg..."
@@ -46,6 +48,6 @@ sleep 3
 pkill ts3client_linux
 cp /app/settings.db /root/.ts3client/
 ./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico"
-#DISPLAY=:99 
+
 
 
