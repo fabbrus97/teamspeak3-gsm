@@ -42,7 +42,7 @@ mkdir -p /root/.ts3client
 # cat ShowEnablePromotions=0 >> /root/.ts3client/settings.ini 
 # cat NoAccountDialog=1 >> /root/.ts3client/settings.ini 
 cd /TeamSpeak3-Client-linux_amd64/
-rm -rf plugins
+# rm -rf plugins
 ./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico" &
 sleep 3
 pkill ts3client_linux
