@@ -18,14 +18,14 @@ for i in {1..20}; do
 done
 
 # Start Xorg in the background
-#Xorg :99 -noreset +extension GLX +extension RANDR +extension RENDER -logfile /tmp/xorg.log -config /etc/X11/xorg.conf &
+Xorg :99 -noreset +extension GLX +extension RANDR +extension RENDER -logfile /tmp/xorg.log -config /etc/X11/xorg.conf &
 
-# Wait for X to be ready
-#for i in {1..20}; do
-#  if xdpyinfo -display :99 > /dev/null 2>&1; then break; fi
-#  echo "Waiting for Xorg..."
-#  sleep 0.5
-#done
+ Wait for X to be ready
+for i in {1..20}; do
+  if xdpyinfo -display :99 > /dev/null 2>&1; then break; fi
+  echo "Waiting for Xorg..."
+  sleep 0.5
+done
 
 # Launch TS3
 mkdir -p /root/.ts3client
