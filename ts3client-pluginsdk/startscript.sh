@@ -44,10 +44,14 @@ mkdir -p /root/.ts3client
 cd /TeamSpeak3-Client-linux_amd64/
 # rm -rf plugins
 ./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico" &
-sleep 3
-pkill ts3client_linux
-cp /app/settings.db /root/.ts3client/
-./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico"
+if [ $(string /root/.ts3client/settings.db | grep -i license | wc -l) -lt 10 ]
+then 
+  sleep 3
+  pkill ts3client_linux
+  cp /app/settings.db /root/.ts3client/
+  ./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico"
+fi
+
 
 
 
