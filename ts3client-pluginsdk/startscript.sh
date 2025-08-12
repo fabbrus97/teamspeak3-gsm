@@ -30,6 +30,7 @@ for i in {1..20}; do
 done
 
 # Launch TS3
+sleep 90 #wait some time to not DOS the server
 mkdir -p /root/.ts3client
 #   accept the license
 # sqlite3 /root/.ts3client/settings.db "CREATE TABLE IF NOT EXISTS Misc (key TEXT PRIMARY KEY, value TEXT);"

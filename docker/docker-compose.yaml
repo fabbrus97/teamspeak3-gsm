@@ -1,0 +1,26 @@
+services:
+  teamspeak:
+    image: teamspeak-gsm
+    container_name: ts-gsm
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+      # - ts3_config:/root/.ts3client
+    ports:
+      - "8078:8000"
+    environment:
+      - TS3_SHOW_TS5_PROMOTION=0
+      - TS3_SHOW_TS5_OVERVIEW=0
+      - TS3_SHOW_UPGRADE_DIALOG=0
+      - TS3_ENABLE_PROMOTIONS=0
+    healthcheck:
+      test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# volumes:
+#  ts3_config:
