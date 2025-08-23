@@ -373,19 +373,6 @@ void* main_loop_play(void* args){
 
 }
 
-void crash_handler(int sig) {
-    printf("Caught signal %d, cleaning up before exit...\n", sig);
-    // Optional: Log to file
-    exit(1);  // Clean exit prevents crash window
-}
-
-void setup_crash_handling() {
-    signal(SIGSEGV, crash_handler);
-    signal(SIGILL,  crash_handler);
-    signal(SIGFPE,  crash_handler);
-    signal(SIGABRT, crash_handler);
-}
-
 //acquire data from ts client, not from esp32!
 void* main_loop_acquire(void* args){
 

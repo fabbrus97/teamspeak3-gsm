@@ -32,7 +32,7 @@ char* at_phonebook_delete(char* index);
 
 //texts apis
 // CrudAPI text_api;
-char* at_text_create(char* dest, char* text);
+char** at_text_create(char* dest, char* text);
 char* at_text_read(char* index, char* mode);
 char* at_text_delete(char* index, char* flag);
 
