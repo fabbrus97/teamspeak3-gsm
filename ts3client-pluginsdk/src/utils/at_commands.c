@@ -88,10 +88,9 @@ void utf8_to_ucs2_encoder(char* src, char** output){
     da: destination addess in string format (string should be included in quotation marks)
     toda: type of address (145 or 129)
 */
-char* at_text_create(char* dest, char* text){
-    //FIXME credo che se il messaggio sia troppo corto, il carattere 0x1A venga stampato prima di > e questo faccia fallire tutto
-    //TODO prova a dividere in 2 comandi, uno per mandare il numero di telefono e il secondo per mandare il testo vero e proprio
-    
+char** at_text_create(char* dest, char* text){
+    char** commands = malloc(sizeof(char*)*3);
+
     /* 
     * converting to usc2 encoding to support emojis 😍😍😍 
     */
@@ -101,14 +100,18 @@ char* at_text_create(char* dest, char* text){
 
 
     size_t bufsize = strlen(hex_dest) + strlen(hex_text) + 20;
-    char* result = malloc(bufsize);
+    char* command1 = malloc(bufsize);
+    char* command2 = malloc(bufsize);
 
-    snprintf(result, bufsize, "AT+CMGS=\"%s\"\r%s%c", hex_dest, hex_text, 0x1A);
+    snprintf(command1, bufsize, "AT+CMGS=\"%s\"\r", hex_dest);
+    snprintf(command2, bufsize, "%s%c", hex_text, 0x1A);
 
     free(hex_dest);
     free(hex_text);
     
-    return result;
+    commands[0] = command1; commands[1] = command2; commands[2] = NULL;
+
+    return commands;
 }
 
 /*
@@ -129,11 +132,11 @@ char* at_text_read(char* index, char* mode){
         snprintf(result, bufsize, "AT+CMGR=%s", index);
     else {
         if(strcmp(mode, "sent") == 0){
-            snprintf(result, bufsize, "AT+CMGL=%s", "STO SENT");
+            snprintf(result, bufsize, "AT+CMGL=\"%s\"", "STO SENT");
         } else if(strcmp(mode, "unread") == 0){
-            snprintf(result, bufsize, "AT+CMGL=%s", "REC UNREAD");
+            snprintf(result, bufsize, "AT+CMGL=\"%s\"", "REC UNREAD");
         } else if(strcmp(mode, "read") == 0){
-            snprintf(result, bufsize, "AT+CMGL=%s", "REC READ");
+            snprintf(result, bufsize, "AT+CMGL=\"%s\"", "REC READ");
         }
     }
     return result;
@@ -219,13 +222,20 @@ char* at_get_own_number(){
     return buffer;
 }
 
-char** at_set_text_mode(){
+char** at_set_text_mode(int UCS2){
     char* textmode = "AT+CMGF=1";
-    char* encoding = "AT+CSCS=\"UCS2\"";
-    char* command1 = malloc(strlen(textmode)+1);
-    char* command2 = malloc(strlen(encoding)+1);
+    char* encoding;
+    char* command1;
+    char* command2;
+    if (UCS2){
+        encoding = "AT+CSCS=\"UCS2\"";
     // snprintf(command1, strlen(textmode) + 1, "%s", textmode);
     // snprintf(command2, strlen(encoding) + 1, "%s", encoding);
+    } else {
+        encoding = "AT+CSCS=\"GSM\"";
+    } 
+    command1 = malloc(strlen(textmode)+1);
+    command2 = malloc(strlen(encoding)+1);
     strcpy(command1, textmode);
     strcpy(command2, encoding);
     char** commands = malloc(sizeof(char*)*3);
@@ -272,11 +282,14 @@ char** at_check_network_status(){
     char* command2 = malloc(strlen(creg)+1);
     char* command3 = malloc(strlen(cops)+1);
 
-    snprintf(command1, strlen(csq), "%s", csq);
-    snprintf(command2, strlen(creg), "%s", creg);
-    snprintf(command3, strlen(cops), "%s", cops);
+    strcpy(command1, csq);
+    strcpy(command2, creg);
+    strcpy(command3, cops);
+    // snprintf(command1, strlen(csq)+1, "%s", csq);
+    // snprintf(command2, strlen(creg)+1, "%s", creg);
+    // snprintf(command3, strlen(cops)+1, "%s", cops);
 
-    char** commands = malloc(sizeof(command1)*2 + 1);
+    char** commands = malloc(sizeof(char*)*4);
     commands[0] = command1; commands[1] = command2; commands[2] = command3; commands[3] = NULL;
     
     return commands;
@@ -480,15 +493,39 @@ int at_process_command(const char* command, char** output){
                         break;
                     } else if (strcmp(param1, "send") == 0){
                         
-                        char** _cmd_list = at_set_text_mode();
+                        char** _cmd_list = at_set_text_mode(1);
+                        cmd_list = _cmd_list;
+                        while (*_cmd_list != NULL){
+                            at_send_command(*_cmd_list, NULL); 
+                            _cmd_list++;
+                        }
+                        
+                        while (cmd_list != NULL && *cmd_list != NULL) {
+                            free(*cmd_list);
+                            cmd_list++;
+                        }
+
+                        _cmd_list = text_api.create(param2, param3);
+                        cmd_list = _cmd_list;
+                        while (*_cmd_list != NULL){
+                            at_send_command(*_cmd_list, NULL); 
+                            _cmd_list++;
+                        }
+
+                        break;
+                    } else if (strcmp(param1, "read") == 0){
+
+                        
+                        char** _cmd_list = at_set_text_mode(0);
                         cmd_list = _cmd_list;
                         while (*_cmd_list != NULL){
                             at_send_command(*_cmd_list, NULL); 
                             _cmd_list++;
                         }
                         // free(cmd_str);
-                        at_send_command(cmd_str = text_api.create(param2, param3), output);
+                        at_send_command(cmd_str = text_api.read(NULL, param3), output);
                         break;
+
                     }
                 }
                 else if (param2){
@@ -497,12 +534,15 @@ int at_process_command(const char* command, char** output){
                         break;
                     }
                     if (strcmp(param1, "read") == 0){
+
+                        char** _cmd_list = at_set_text_mode(0);
+                        cmd_list = _cmd_list;
+                        while (*_cmd_list != NULL){
+                            at_send_command(*_cmd_list, NULL); 
+                            _cmd_list++;
+                        }
+                        // free(cmd_str);
                         at_send_command(cmd_str = text_api.read(param2, NULL), output);
-                        break;
-                    }
-                } else if (param3){
-                    if (strcmp(param1, "read") == 0){
-                        at_send_command(cmd_str = text_api.read(NULL, param3), output);
                         break;
                     }
                 }
@@ -514,7 +554,7 @@ int at_process_command(const char* command, char** output){
             char** output_start = _output;
             char** _cmd_list = at_check_network_status();
             cmd_list = _cmd_list;
-            while (_cmd_list != NULL){
+            while (*_cmd_list != NULL){
                 at_send_command(*_cmd_list, _output);
                 _cmd_list++;
                 _output++;
