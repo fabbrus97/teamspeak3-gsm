@@ -6,11 +6,13 @@ OUTPUT = "/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so"
 # CFLAGS = -c -O2 -Wall -fPIC
 CFLAGS = -c -g -O0 -fPIC -Wall # -w
 CONFIG_PATH = "${HOME}/.config/teamspeak-gsm"
+SHARE_PATH = "${HOME}/.local/share/teamspeak-gsm"
 all: config test_plugin
 
 config:
 	mkdir -p $(CONFIG_PATH)
 	if [ ! -f $(CONFIG_PATH) ]; then cp settings.ini $(CONFIG_PATH)/ ; fi
+	mkdir -p $(SHARE_PATH)
 
 test_plugin: server.o plugin.o at_commands.o settings.o
 	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o -lsoxr -liniparser
