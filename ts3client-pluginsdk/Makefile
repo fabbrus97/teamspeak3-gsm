@@ -14,8 +14,8 @@ config:
 	if [ ! -f $(CONFIG_PATH) ]; then cp settings.ini $(CONFIG_PATH)/ ; fi
 	mkdir -p $(SHARE_PATH)
 
-test_plugin: server.o plugin.o at_commands.o settings.o
-	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o -lsoxr -liniparser
+test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o
+	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o noise_clean.o -lsoxr -liniparser -liconv -lm -lkissfft-float
 #-lcoap-3-notls 
 
 plugin.o: ./src/plugin.c
@@ -29,7 +29,11 @@ settings.o: ./src/settings.c
 	gcc -Iinclude -I/usr/include/iniparser src/settings.c $(CFLAGS)
 
 at_commands.o: ./src/utils/at_commands.c
-	gcc -Isrc/utils src/utils/at_commands.c -liconv $(CFLAGS)
+# 	gcc -Isrc/utils src/utils/at_commands.c -liconv $(CFLAGS)
+	gcc -Isrc src/utils src/utils/at_commands.c $(CFLAGS)
+
+noise_clean.o: ./src/utils/noise_clean.c
+	gcc -Iinclude src/utils/noise_clean.c ${CFLAGS}
 
 clean:
 	rm -rf *.o /home/simone/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so

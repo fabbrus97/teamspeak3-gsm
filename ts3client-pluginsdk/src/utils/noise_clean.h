@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "settings.h"
+#include "../settings.h"
 #include "sdft.h"
 
 #define MAX_INPUT 1000000

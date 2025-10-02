@@ -28,16 +28,16 @@ void load_variables(){
 
 	// ~/.local/share path
 	const char* share_path = "/.local/share/teamspeak-gsm/";
-	char *fullpath = malloc(strlen(home) + strlen(path) + 1);
+	fullpath = malloc(strlen(home) + strlen(path) + 1);
 	strcpy(fullpath, home);
     strcat(fullpath, share_path);
 
 	// files in share path
 	char* noiseprofile_fullpath = malloc(strlen(share_path) + strlen("noiseprofile.bin") + 1); 
-	strcopy(noiseprofile_fullpath, share_path);
+	strcpy(noiseprofile_fullpath, share_path);
 	strcat(noiseprofile_fullpath, "noiseprofile.bin");
 	char* noiserecording_fullpath = malloc(strlen(share_path) + strlen("noiserecording.pcm") + 1); 
-	strcopy(noiserecording_fullpath, share_path);
+	strcpy(noiserecording_fullpath, share_path);
 	strcat(noiserecording_fullpath, "noiserecording.pcm");
 
 	dictionary  *   ini ;
