@@ -211,12 +211,14 @@ int remove_noise(uint8_t* input, size_t input_length, uint8_t* output){
 /*
  TODO 
  - aggiungere logica nel main
-    - estendere makefile
-    - chiamare funzione di cancellazione del rumore (se l'impostazione è attiva)
-    - aggiungere funzione per registrare audio del rumore per calibrazione per 30 secondi
+    - chiamare funzione di cancellazione del rumore (se l'impostazione è attiva) ✅
+    - aggiungere funzione per registrare audio del rumore per calibrazione per 30 secondi 🚧
     - aggiungere funzione nel firmware per registrare rumores
+    - aggiungere record_noise a help()
+    - server.c quando riceve audio deve controllare se la variabile di rec e' 1, in tal caso deve salvare nel file il rumore
+    - plugin.c non deve applicare la soppressione del rumore se la variabile di rec e' 1 ✅
 
-    test audio con sdft: 
+    NOTE test audio con sdft: 
     - ./sdft audio2clean_S16.pcm noise.pcm output
     - aplay -f S16 -r 8000 -c 1 output
 */

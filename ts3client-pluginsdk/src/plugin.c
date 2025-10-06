@@ -44,6 +44,12 @@ const char* devID = "ts3callbotplayback";
 const char* devDisplayName = "ts3_callbot_playback";
 sem_t c_pb_sem;
 
+int recording_noise = 0;
+int recorded_noise_samples = 0;
+sem_t noise_sem;
+
+static uint8_t* noised_audio_buffer = NULL;
+static uint8_t* denoised_audio_buffer = NULL;
 static char* pluginID = NULL;
 static uint64 currentServerConnectionHandlerID;
 
@@ -373,7 +379,7 @@ void* main_loop_play(void* args){
 
 }
 
-//acquire data from ts client, not from esp32!
+//acquire data from from esp32
 void* main_loop_acquire(void* args){
 
 	uint8_t* mybuffer = NULL;
@@ -398,6 +404,13 @@ void* main_loop_acquire(void* args){
 		// printf("my thread id is %i\n", self);
 
 		receivedBytes = receive_data(&mybuffer);
+
+		if(noise_cancelnoise && !recording_noise){
+			noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
+			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
+			remove_noise(noised_audio_buffer, receivedBytes, denoised_audio_buffer);
+			free(noised_audio_buffer);
+		}
 
 
 
@@ -432,7 +445,12 @@ void* main_loop_acquire(void* args){
 			// printf("%i, ", mybuffer[i]);
 			// uint8_t uintval = mybuffer[i];
 			// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
-			audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
+			
+			if (!noise_cancelnoise || recording_noise)
+				audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
+			else
+				audio_buffer[audio_buffer_pos+i] = (short) (denoised_audio_buffer[i] - 0x80) << 8;
+
 			// audio_buffer[i] = shortVal;
 			// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
 
@@ -456,79 +474,6 @@ void* main_loop_acquire(void* args){
 	}
 
 
-}
-
-void* main_loop_play_old(void* arg)
-{
-	/*
-		https://www.geeksforgeeks.org/use-posix-semaphores-c/
-
-		ci sono delle variabili da osservare:
-			- buffer dei messaggi
-			- buffer delle chiamate
-		può convenire fare due thread
-	*/
-	// Clean buffers:
-    // memset(server_message, '\0', sizeof(server_message));
-
-	int socket_desc;
-	struct sockaddr_in server_addr, client_addr;
-	char /* server_message[2000], */ client_message[6000];
-	int client_struct_length; // = sizeof(client_addr);
-
-    client_struct_length = sizeof(client_addr);
-    memset(client_message, '\0', sizeof(client_message));
-
-    // Create UDP socket:
-    socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-    if(socket_desc < 0){
-        printf("Error while creating socket\n");
-        return -1;
-    }
-    printf("Socket created successfully\n");
-
-    // Set port and IP:
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(ts_audio_port);
-    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
-
-    // Bind to the set port and IP:
-    if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
-        printf("Couldn't bind to the port\n");
-        exit(1);
-    }
-    printf("Done with binding\n");
-
-    printf("Listening for incoming messages...\n\n");
-
-	int lenRecv;
-	for(;;){
-		lenRecv = recvfrom(socket_desc, client_message, sizeof(client_message), NULL,
-            (struct sockaddr*)&client_addr, &client_struct_length);
-		printf("i have received: %i\n", lenRecv);
-        if (lenRecv < 0){
-            printf("Couldn't receive\n");
-			continue;
-        }
-        printf("Received message from IP: %s and port: %i\n",
-              inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-
-        // int buffer_length = (int)(lenRecv/2 + 0.5)+100;
-		short buffer[lenRecv];
-		for (int i = 0; i < lenRecv; i++){
-			uint8_t uintVal = client_message[i];
-			short shortVal = uintVal < 127 ? (1 - uintVal/(127))*(-32768) : ((uintVal - 127)/127)*(32768);
-			buffer[i] = shortVal;
-		}
-        ts3Functions.processCustomCaptureData(devID, buffer, lenRecv);
-
-        struct timespec myts;
-        myts.tv_sec=0;
-        myts.tv_nsec = 10000; //10 millisec
-        nanosleep(&myts, &myts);
-
-    }
 }
 
 /* Custom code called right before the plugin is unloaded */
@@ -1202,6 +1147,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 		//0 means the semaphore is shared between threads
 		//1 is the initial value of the semaphore
 		sem_init(&c_pb_sem, 0, 1);
+		sem_init(&noise_sem, 0, 1);
 
 		pthread_t t1;
 		pthread_t t2;

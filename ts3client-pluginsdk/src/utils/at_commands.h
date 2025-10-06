@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <iconv.h>
 #include <errno.h>
+#include <semaphore.h>
+#include "../plugin.h"
 
 #include "../settings.h"
 
@@ -68,5 +70,7 @@ char* at_help();
 void at_init(char* server, int port);
 
 int at_process_command(const char* command, char** output);
+
+void record_noise(int start);
 
 #endif
