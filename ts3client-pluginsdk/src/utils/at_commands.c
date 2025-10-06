@@ -5,6 +5,11 @@
 
 #include "at_commands.h"
 
+
+char* start_command = "RNSTART"; //record noise start
+char* stop_command = "RNSTOP"; //record noise stop
+
+
 static struct sockaddr_in server_addr;
 
 char* at_phonebook_create(char* index, char* name, char* number){
@@ -314,6 +319,24 @@ static CrudAPI text_api = {
     .update = NULL,
     .del = at_text_delete
 };
+
+void record_noise(){
+    // send command to start or stop recording noise
+    
+    at_send_command(start_command, NULL);
+    
+    while(1){
+        sem_wait(&noise_sem);
+        if (recorded_noise_samples > 30*8000){
+            sem_post(&noise_sem);
+            break;
+        }
+        sem_post(&noise_sem);
+    }
+    at_send_command(stop_command, NULL);
+    
+
+}
 
 int at_send_command(char* command, char** output){
     int sockfd;
