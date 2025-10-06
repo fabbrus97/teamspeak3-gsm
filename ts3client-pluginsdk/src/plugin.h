@@ -19,6 +19,11 @@
 #define PLUGINS_EXPORTDLL __attribute__ ((visibility("default")))
 #endif
 
+/* noise cleaning algorithm  */
+extern int recording_noise = 0;
+extern int recorded_noise_samples = 0;
+extern sem_t noise_sem;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
