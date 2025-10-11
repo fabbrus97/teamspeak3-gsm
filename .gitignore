@@ -1,5 +1,7 @@
 *.o
 .env
 *.out
-*/.vscode/
+.vscode/
 main.hpp
+.vscode/settings.json
+**/.vscode/
