@@ -329,6 +329,7 @@ void record_noise(){
         sem_wait(&noise_sem);
         if (recorded_noise_samples > 30*8000){
             sem_post(&noise_sem);
+            usleep(50000);
             break;
         }
         sem_post(&noise_sem);
@@ -422,7 +423,7 @@ int at_process_command(const char* command, char** output){
 	char buf[TCP_BUFFER];
 	char *s, *param1 = NULL, *param2 = NULL, *param3 = NULL, *param4 = NULL;
 	int i = 0;
-	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK, PHONEBOOK_MODE, OWN_NUMBER, HELP } cmd = CMD_NONE;
+	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK, PHONEBOOK_MODE, OWN_NUMBER, RECORD_NOISE, HELP } cmd = CMD_NONE;
 
 	printf("AT: process command: '%s'\n", command);
 
@@ -447,6 +448,8 @@ int at_process_command(const char* command, char** output){
                 cmd = PHONEBOOK_MODE;
             } else if (!strcmp(s, "mynumber")) {
                 cmd = OWN_NUMBER;
+            } else if (!strcmp(s, "noise")){
+                cmd = RECORD_NOISE;
             } else if (!strcmp(s, "help")){
                 cmd = HELP;
             }
@@ -621,6 +624,10 @@ int at_process_command(const char* command, char** output){
             
             
             at_send_command(at_get_own_number(), output);
+            break;
+        case RECORD_NOISE:
+            record_noise();
+            
             break;
         case HELP:
             
