@@ -395,6 +395,10 @@ void* main_loop_acquire(void* args){
 	p.tv_nsec = 50000000L;
 	int time2sleep = ((playbackBufferSize)*1000000/48000);
 	int bytes2write = 0;
+
+	char* noisefilepathtmp = malloc(sizeof(char)*100);
+	snprintf(noisefilepathtmp, 100, "%s.tmp", noise_noiserecordingfile);
+
 	for(;;){
 		// printf("DEBUG another loop bites the dust %i\n", i);
 		// usleep(20*1000); // sleep 30 ms
@@ -405,12 +409,18 @@ void* main_loop_acquire(void* args){
 
 		receivedBytes = receive_data(&mybuffer);
 
+		sem_wait(&noise_sem);
 		if(noise_cancelnoise && !recording_noise){
-			noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
+			// noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
 			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
-			remove_noise(noised_audio_buffer, receivedBytes, denoised_audio_buffer);
+			remove_noise(mybuffer, receivedBytes, denoised_audio_buffer);
 			free(noised_audio_buffer);
+		} else if (recording_noise){
+			
+			FILE* noisetmp = fopen(noisefilepathtmp, "a");
+			fwrite(mybuffer, sizeof(uint8_t), receivedBytes, noisetmp);
 		}
+		sem_post(&noise_sem);
 
 
 
@@ -446,10 +456,13 @@ void* main_loop_acquire(void* args){
 			// uint8_t uintval = mybuffer[i];
 			// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
 			
+			sem_wait(&noise_sem);
 			if (!noise_cancelnoise || recording_noise)
 				audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
 			else
 				audio_buffer[audio_buffer_pos+i] = (short) (denoised_audio_buffer[i] - 0x80) << 8;
+			sem_post(&noise_sem);
+			
 
 			// audio_buffer[i] = shortVal;
 			// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
