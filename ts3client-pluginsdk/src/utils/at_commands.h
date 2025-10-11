@@ -71,6 +71,6 @@ void at_init(char* server, int port);
 
 int at_process_command(const char* command, char** output);
 
-void record_noise(int start);
+void record_noise();
 
 #endif
