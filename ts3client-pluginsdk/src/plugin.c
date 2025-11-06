@@ -398,6 +398,8 @@ void* main_loop_acquire(void* args){
 
 	char* noisefilepathtmp = malloc(sizeof(char)*100);
 	snprintf(noisefilepathtmp, 100, "%s.tmp", noise_noiserecordingfile);
+	
+	int wasIrecordingBefore = 0;
 
 	for(;;){
 		// printf("DEBUG another loop bites the dust %i\n", i);
@@ -415,10 +417,19 @@ void* main_loop_acquire(void* args){
 			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
 			remove_noise(mybuffer, receivedBytes, denoised_audio_buffer);
 			free(noised_audio_buffer);
+
+			if (wasIrecordingBefore){
+				rename(noisefilepathtmp, noise_noiserecordingfile);
+				remove(noisefilepathtmp);
+				wasIrecordingBefore = 0;
+			}
+
 		} else if (recording_noise){
 			
 			FILE* noisetmp = fopen(noisefilepathtmp, "a");
 			fwrite(mybuffer, sizeof(uint8_t), receivedBytes, noisetmp);
+			wasIrecordingBefore = 1;
+
 		}
 		sem_post(&noise_sem);
 
