@@ -9,7 +9,7 @@
 char* channel_to_connect;
 int ts_audio_port; 
 char* ucontroller_address;
-char* ucontroller_cmd_port;
+int ucontroller_cmd_port;
 char* ts_ip_bind;
 int ucontroller_audio_port;
 int noise_cancelnoise;
@@ -28,15 +28,17 @@ void load_variables(){
 
 	// ~/.local/share path
 	const char* share_path = "/.local/share/teamspeak-gsm/";
-	fullpath = malloc(strlen(home) + strlen(path) + 1);
-	strcpy(fullpath, home);
-    strcat(fullpath, share_path);
+	const char* fullpath2 = malloc(strlen(home) + strlen(share_path) + 1);
+	strcpy(fullpath2, home);
+    strcat(fullpath2, share_path);
 
 	// files in share path
-	char* noiseprofile_fullpath = malloc(strlen(share_path) + strlen("noiseprofile.bin") + 1); 
+	char* noiseprofile_fullpath = malloc(strlen(home) + strlen(share_path) + strlen("noiseprofile.bin") + 1); 
+	strcpy(noiseprofile_fullpath, home);
 	strcpy(noiseprofile_fullpath, share_path);
 	strcat(noiseprofile_fullpath, "noiseprofile.bin");
-	char* noiserecording_fullpath = malloc(strlen(share_path) + strlen("noiserecording.pcm") + 1); 
+	char* noiserecording_fullpath = malloc(strlen(home) + strlen(share_path) + strlen("noiserecording.pcm") + 1); 
+	strcpy(noiseprofile_fullpath, home);
 	strcpy(noiserecording_fullpath, share_path);
 	strcat(noiserecording_fullpath, "noiserecording.pcm");
 
@@ -55,16 +57,22 @@ void load_variables(){
 	ini = iniparser_load(fullpath);
     if (ini==NULL) {
         fprintf(stderr, "cannot parse file: %s\n", fullpath);
-        ini=fopen(fullpath, "w");
+        // ini=fopen(fullpath, "w");
 
-		fprintf(ini,
-		"[ts]\n"
-		"\n"
-		"[ucontroller]\n"
-		"\n");
-		fclose(ini);
-		ini = iniparser_load(fullpath);
-    } 
+		// fprintf(ini,
+		// "[ts]\n"
+		// "\n"
+		// "[ucontroller]\n"
+		// "\n");
+		// fclose(ini);
+		ini = iniparser_load(fullpath2);
+		if (ini == NULL){
+	        fprintf(stderr, "cannot parse file: %s\n", fullpath2);
+			exit(1);
+		}
+    } else {
+		printf("[DEBUG] %s read correctly\n", fullpath);
+	}
 	iniparser_dump(ini, stderr); //dumps dictionary to stderr (prints the dict to a file pointer, in this case is stderr)
 	ini_channel = iniparser_getstring(ini, "ts:channel", "default");
 	ini_ucontroller_ip = iniparser_getstring(ini, "ucontroller:ip", "127.0.0.1");
@@ -120,5 +128,7 @@ void load_variables(){
 	iniparser_freedict(ini);
 
     printf("[DEBUG] ts ip to bind is ini/env/final: %s/%s/%s\n", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
+    printf("[DEBUG] ucontroller ip: %s cmd port: %i\n", ucontroller_address, ucontroller_cmd_port); //, ucontroller_cmd_port);
+	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 
 }
