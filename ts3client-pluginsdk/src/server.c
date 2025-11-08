@@ -310,7 +310,7 @@ ssize_t receive_data(uint8_t** data){
     read_timeout.tv_sec=0;
     read_timeout.tv_nsec = 10; //0.1 millisec
     // printf("setting socket option\n");
-    // setsockopt(socket_desc, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof read_timeout);
+    // setsockopt(socket_desc, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout)); //TODO timeout
     // printf("done\n");
     ssize_t recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
             (struct sockaddr*)&client_addr, &client_struct_length);
