@@ -1,6 +1,7 @@
 #include "SIMutils.hpp"
 
 int call_in_progress = 0; 
+int recording_noise = 0; 
 // extern SoftwareSerial GPRS(3, 2);
 
 

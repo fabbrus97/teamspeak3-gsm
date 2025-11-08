@@ -82,7 +82,7 @@ void ARDUINO_ISR_ATTR timer_callback() {
 
   // portENTER_CRITICAL_ISR(&timerMuxS);
   //if we are in a call
-  if (call_in_progress)  {
+  if (call_in_progress || recording_noise)  {
     portENTER_CRITICAL_ISR(&timerMuxS);
       audio2send_buffer[audio2send_pos_w++] = adc1_get_raw(ADC1_CHANNEL_0)/16; //(analogRead(AUDIOPIN_IN));
       audio2send_pos_w %= audio2send_buffer_sz;
@@ -199,6 +199,16 @@ void taskloop(void * parameter){
         read = client.read((uint8_t*)bufferloopcmd, BUFFERLOOPSIZE);
 
         // if (read){
+          if (strncmp(bufferloopcmd, "RNSTART", 7) == 0){
+            printf("SETTING recording_noise TO 1\n");
+            recording_noise = 1;
+          }
+          if (strncmp(bufferloopcmd, "RNSTOP", 6) == 0){
+            printf("SETTING recording_noise TO 0\n");
+            recording_noise = 0;
+          }
+          
+
           if (strncmp(bufferloopcmd, "!STOPTEXT!", 10) == 0){
             Serial2.write(26);
           }
@@ -365,7 +375,9 @@ void loop() {
   // if (did_play)
   //   printf("[DEBUG] did_play: %i, pos: %i\n", did_play, played_audio_pos);
   // send audio to ts
-  if(call_in_progress){
+
+  if(call_in_progress || recording_noise){
+
     // printf("[DEBUG] call in progress\n");
     int ts1 = millis();
     int tmp = -1;
@@ -396,7 +408,7 @@ void loop() {
       justsent = 1;
       if (audio2send_sent + audio2send >= audio2send_buffer_sz){
         // printf("%i + %i, max: %i\n", audio2send_sent, audio2send_buffer_sz - audio2send_sent, audio2send_buffer_sz);
-        // printf("[DEBUG] sending %i\n", audio2send_buffer_sz - audio2send_sent);
+        printf("[DEBUG] sending %i\n", audio2send_buffer_sz - audio2send_sent);
         //portENTER_CRITICAL(&timerMuxS);
         send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send_buffer_sz - audio2send_sent);
         //portEXIT_CRITICAL(&timerMuxS);
