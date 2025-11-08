@@ -8,4 +8,5 @@ hang: hangs the calls
 network: shows stats about the network
 pb_mode [true|false]: if false, accept any call; otherwise, accepts only if the number is saved in the phonebook
 mynumber: shows my number
+noise: record noise for noise removal algorithm
 help: displays this help

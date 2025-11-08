@@ -209,7 +209,7 @@ void* main_loop_play(void* args){
 		printf("Error starting udp socket");
 		exit(1);
 	}
-	printf(" ========== DEBUG THREAD STARTED ========== ");
+	printf(" ========== DEBUG THREAD STARTED ========== \n");
 	// uint8_t* mybuffer = NULL;
 	uint8_t* mybuffer = NULL;
 	const int bytes2play = 256;
@@ -396,8 +396,21 @@ void* main_loop_acquire(void* args){
 	int time2sleep = ((playbackBufferSize)*1000000/48000);
 	int bytes2write = 0;
 
+	char* _noisefilepathtmp = malloc(sizeof(char)*100);
 	char* noisefilepathtmp = malloc(sizeof(char)*100);
-	snprintf(noisefilepathtmp, 100, "%s.tmp", noise_noiserecordingfile);
+	char* noisefinalpath = malloc(sizeof(char)*100);
+	// compute_file_path(noise_noiserecordingfile, _noisefilepathtmp);
+	if (noise_noiserecordingfile[0] == '~') {
+        const char *home = getenv("HOME"); // get home directory
+        if (home) {
+            snprintf(_noisefilepathtmp, (strlen(noise_noiserecordingfile) - 1) + strlen(home) + 1, "%s%s", home, noise_noiserecordingfile + 1);
+            snprintf(noisefinalpath, (strlen(noise_noiserecordingfile) - 1) + strlen(home) + 1, "%s%s", home, noise_noiserecordingfile + 1);
+        } else {
+			strcpy(_noisefilepathtmp, noise_noiserecordingfile);
+			strcpy(noisefinalpath, noise_noiserecordingfile);
+		}
+    }
+	snprintf(noisefilepathtmp, strlen(_noisefilepathtmp) + strlen(".tmp") + 1, "%s.tmp", _noisefilepathtmp);
 	
 	int wasIrecordingBefore = 0;
 
@@ -409,29 +422,50 @@ void* main_loop_acquire(void* args){
 		// self = pthread_self();
 		// printf("my thread id is %i\n", self);
 
+		sem_wait(&noise_sem);
+		printf("[DEBUG] recording_noise: %i\n", recording_noise);
+		if (!recording_noise && wasIrecordingBefore){
+			
+			rename(noisefilepathtmp, noisefinalpath);
+			// remove(noisefilepathtmp);
+			wasIrecordingBefore = 0;
+		}
+		sem_post(&noise_sem);
+
+
 		receivedBytes = receive_data(&mybuffer);
 
+		printf("[DEBUG] i'm gonna fucking wait on noise_sem\n");
 		sem_wait(&noise_sem);
+		printf("[DEBUG] finally the wait is over\n");
+
 		if(noise_cancelnoise && !recording_noise){
+			printf("[DEBUG] I'm in the if 1!\n");
+
 			// noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
 			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
 			remove_noise(mybuffer, receivedBytes, denoised_audio_buffer);
 			free(noised_audio_buffer);
 
-			if (wasIrecordingBefore){
-				rename(noisefilepathtmp, noise_noiserecordingfile);
-				remove(noisefilepathtmp);
-				wasIrecordingBefore = 0;
-			}
-
 		} else if (recording_noise){
-			
+
+			printf("[DEBUG] recorded_noise_samples: %i/%i\n", recorded_noise_samples, 30*8000);
 			FILE* noisetmp = fopen(noisefilepathtmp, "a");
+			
+			// printf("[DEBUG] noisefilepathtmp is %s\n", noisefilepathtmp);
+			assert(noisetmp != NULL);
+
 			fwrite(mybuffer, sizeof(uint8_t), receivedBytes, noisetmp);
+			recorded_noise_samples += receivedBytes;
 			wasIrecordingBefore = 1;
+			fclose(noisetmp);
 
 		}
+		printf("[DEBUG] I'm gonna release noise_sem\n");
+
 		sem_post(&noise_sem);
+
+		printf("[DEBUG] noise_sem is free\n");
 
 
 
@@ -1181,7 +1215,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 
 
 		//INIT MY AT COMMANDS LIBRARY
-		at_init(NULL, NULL);
+		at_init(ucontroller_address, ucontroller_cmd_port);
     }
 }
 
