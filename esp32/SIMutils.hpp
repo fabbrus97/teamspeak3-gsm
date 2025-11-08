@@ -6,6 +6,7 @@
 #include <HardwareSerial.h>
 
 extern int call_in_progress;
+extern int recording_noise;
 // extern SoftwareSerial GPRS;
 
 void parse_serial(char* str);
