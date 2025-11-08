@@ -11,6 +11,30 @@
             "processId": "${command:pickProcess}",
             "program": "${userHome}/Scaricati/TeamSpeak3-Client-linux_amd64/ts3client_linux_amd64",
             "MIMode": "gdb"
-        }
+        }, 
+        {
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/simone/Scaricati/TeamSpeak3-Client-linux_amd64/ts3client_linux_amd64",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "/home/simone/Scaricati/TeamSpeak3-Client-linux_amd64/",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
     ]
 }

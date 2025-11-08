@@ -5,6 +5,7 @@
         "limits.h": "c",
         "float.h": "c",
         "server.h": "c",
-        "ts3_functions.h": "c"
+        "ts3_functions.h": "c",
+        "at_commands.h": "c"
     }
 }
