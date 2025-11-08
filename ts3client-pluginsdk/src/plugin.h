@@ -9,7 +9,7 @@
 
 #include "server.h"
 #include "utils/at_commands.h"
-#include "ts3_functions.h"
+#include "../include/ts3_functions.h"
 #include "settings.h"
 #include <signal.h>
 
@@ -20,8 +20,8 @@
 #endif
 
 /* noise cleaning algorithm  */
-extern int recording_noise = 0;
-extern int recorded_noise_samples = 0;
+extern int recording_noise;
+extern int recorded_noise_samples;
 extern sem_t noise_sem;
 
 #ifdef __cplusplus

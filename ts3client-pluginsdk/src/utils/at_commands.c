@@ -323,11 +323,17 @@ static CrudAPI text_api = {
 void record_noise(){
     // send command to start or stop recording noise
     
-    at_send_command(start_command, NULL);
-    
+
+    at_send_command(start_command, NULL); 
+    sem_wait(&noise_sem);
+    recording_noise = 1;
+    sem_post(&noise_sem);
+
     while(1){
         sem_wait(&noise_sem);
         if (recorded_noise_samples > 30*8000){
+            recording_noise = 0;
+
             sem_post(&noise_sem);
             usleep(50000);
             break;
