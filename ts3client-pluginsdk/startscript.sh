@@ -54,7 +54,7 @@ cd /TeamSpeak3-Client-linux_amd64/
 echo "[INFO] starting ts..."
 if ! [ -f /root/.ts3client/settings.db ]
 then
-  ./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico" &
+  ./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=BOOTYCALL&channel=Generico" &
   sleep 3
   pkill ts3client_linux
 fi
@@ -68,6 +68,5 @@ then
   cp /app/settings.db /root/.ts3client/
 fi
 echo "[INFO] starting TS again"
-./ts3client_linux_amd64 --no-sandbox "ts3server://ts.109tech.com?port=9987&nickname=BOOTYCALL&channel=Generico"
-
+./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=BOOTYCALL&channel=Generico"
 
