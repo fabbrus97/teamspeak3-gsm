@@ -15,7 +15,7 @@ config:
 
 test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o
 	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o noise_clean.o -lsoxr -liniparser 
-#-liconv 
+#-liconv -lm
 #-lcoap-3-notls 
 
 plugin.o: ./src/plugin.c
