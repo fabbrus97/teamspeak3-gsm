@@ -9,12 +9,8 @@ services:
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
       # - ts3_config:/root/.ts3client
     ports:
-      - "8078:8000"
-    environment:
-      - TS3_SHOW_TS5_PROMOTION=0
-      - TS3_SHOW_TS5_OVERVIEW=0
-      - TS3_SHOW_UPGRADE_DIALOG=0
-      - TS3_ENABLE_PROMOTIONS=0
+      - "8078:8000/udp"
+    env_file: ".env"
     healthcheck:
       test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
       interval: 30s
