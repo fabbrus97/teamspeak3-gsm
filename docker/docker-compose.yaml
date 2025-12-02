@@ -1,0 +1,23 @@
+services:
+  teamspeak:
+    image: teamspeak-gsm
+    container_name: ts-gsm
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+      # - ts3_config:/root/.ts3client
+    ports:
+      - "8078:8000/udp"
+    env_file: ".env"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# volumes:
+#  ts3_config:
+
