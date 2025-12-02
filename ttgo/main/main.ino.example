@@ -1,0 +1,455 @@
+/*
+  Rui Santos
+  Complete project details at https://RandomNerdTutorials.com/esp32-cloud-mqtt-broker-sim800l/
+  
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files.
+  
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+*/
+
+/*
+ *
+ * Defines and library imports
+ *
+*/
+
+// #define DUMP_AT_COMMANDS
+// TTGO T-Call pins
+#define MODEM_RST            5
+#define MODEM_PWKEY          4
+#define MODEM_POWER_ON       23
+#define MODEM_TX             27
+#define MODEM_RX             26
+#define I2C_SDA              21
+#define I2C_SCL              22
+// for battery
+#define IP5306_ADDR          0x75
+#define IP5306_REG_SYS_CTL0  0x00
+#define AUDIOPIN_OUT         25 // gpio 32, pin 25
+
+#include <SETTINGS.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <Wire.h>
+#include <TinyGsmClient.h>
+#include "driver/dac.h"
+#include "driver/adc.h"
+#include "wolverine.h"
+#include "TSutils.hpp"
+#include "SIMutils.hpp"
+
+
+/*
+ *
+ * Global variables
+ *
+*/
+
+#ifdef DUMP_AT_COMMANDS
+  #include <StreamDebugger.h>
+  StreamDebugger debugger(SerialAT, SerialMon);
+  TinyGsm modem(debugger);
+#else
+  TinyGsm modem(SerialAT);
+#endif
+TinyGsmClient client(modem);
+// I2C for SIM800 (to keep it running when powered from battery)
+TwoWire I2CPower = TwoWire(0);
+
+char* ssid = ""; //insert your ssid;
+const char* password =  ""; // insert your pwd;
+IPAddress staticIP(192, 168, 1, 18); // Set your static IP address here
+IPAddress gateway(192, 168, 1, 1);     // Set your gateway IP address here
+IPAddress subnet(255, 255, 255, 0);    // Set your subnet mask here
+
+TaskHandle_t Task1;
+
+//for command processing
+#define BUFFERLOOPSIZE 1024
+char bufferloopcmd[BUFFERLOOPSIZE];
+
+//for audio processing
+int audio_buffer_pos = 0, serial_buffer_pos=0, played_audio_pos = 1024 * 4;
+const int buf_sz = 1024 * 4;
+char audio_buffer[buf_sz];  //orig buf_size = 1024*6
+int audio2send_pos_w = 0, audio2send_sent = 0;
+int justsent = 0;
+const int max_audio2send = 512, audio2send_buffer_sz = max_audio2send * 12;
+int data2copy = 0;
+uint8_t audio2send_buffer[audio2send_buffer_sz];
+char bufferloop[BUFFERLOOPSIZE];
+
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE timerMuxS = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE bufferMuxS = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE new_audioMuxS = portMUX_INITIALIZER_UNLOCKED;
+
+hw_timer_t* timer = NULL;
+
+// CANCELLAMI - PER TEST
+int wolverine_pos = 0;
+
+/*
+ *
+ * Functions
+ *
+*/
+
+void taskloop(void * parameter);
+
+void ARDUINO_ISR_ATTR timer_callback() {
+
+  if (call_in_progress){
+    portENTER_CRITICAL_ISR(&timerMux);
+
+    if (true || audio_buffer_pos != played_audio_pos ){
+
+      portEXIT_CRITICAL_ISR(&timerMux);
+
+      // ledcWrite(AUDIOPIN_OUT, (uint8_t)(audio_buffer[played_audio_pos]));
+      dac_output_voltage(DAC_CHANNEL_1, (uint8_t)(audio_buffer[played_audio_pos]));
+      // dac_output_voltage(DAC_CHANNEL_1, audio_data[wolverine_pos++]);
+      // wolverine_pos %= sizeof(audio_data);
+
+
+      audio_buffer[played_audio_pos] = 0;
+
+      played_audio_pos++;
+      played_audio_pos = played_audio_pos % buf_sz;
+
+    } else {
+      portEXIT_CRITICAL_ISR(&timerMux);
+    }
+  }
+
+  /********/
+
+  if (call_in_progress || recording_noise)  {
+    portENTER_CRITICAL_ISR(&timerMuxS);
+      audio2send_buffer[audio2send_pos_w++] = adc1_get_raw(ADC1_CHANNEL_6)/16; //(analogRead(AUDIOPIN_IN));
+      audio2send_pos_w %= audio2send_buffer_sz;
+    portEXIT_CRITICAL_ISR(&timerMuxS);
+
+  }
+}
+
+bool setPowerBoostKeepOn(int en){
+  I2CPower.beginTransmission(IP5306_ADDR);
+  I2CPower.write(IP5306_REG_SYS_CTL0);
+  if (en) {
+    I2CPower.write(0x37); // Set bit1: 1 enable 0 disable boost keep on
+  } else {
+    I2CPower.write(0x35); // 0x37 is default reg value
+  }
+  return I2CPower.endTransmission() == 0;
+}
+
+/*
+ *
+ * Main
+ *
+*/
+
+void set_voice_paths(){
+  int sleeptime = 500;
+  SerialAT.write("AT+CLVL=100\r\n");
+  delay(sleeptime);
+  SerialAT.write("AT+CMIC=1,8\r\n");
+  delay(sleeptime);
+  SerialAT.write("AT+CAAS=0\r\n");
+  delay(sleeptime);
+  SerialAT.write("AT+CHF=0,1\r\n");
+  delay(sleeptime);
+}
+
+void setup() {
+  // Set console baud rate
+  SerialMon.begin(115200);
+  delay(10);
+  
+  // Start I2C communication
+  I2CPower.begin(I2C_SDA, I2C_SCL, 400000);
+  
+  // Keep power when running from battery
+  bool isOk = setPowerBoostKeepOn(1);
+  SerialMon.println(String("IP5306 KeepOn ") + (isOk ? "OK" : "FAIL"));
+
+  // Set modem reset, enable, power pins
+  pinMode(MODEM_PWKEY, OUTPUT);
+  pinMode(MODEM_RST, OUTPUT);
+  pinMode(MODEM_POWER_ON, OUTPUT);
+  digitalWrite(MODEM_PWKEY, LOW);
+  digitalWrite(MODEM_RST, HIGH);
+  digitalWrite(MODEM_POWER_ON, HIGH);
+  
+  SerialMon.println("Wait...");
+
+  // Set GSM module baud rate and UART pins
+  SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+  delay(6000);
+
+  // Restart takes quite some time
+  // To skip it, call init() instead of restart()
+  SerialMon.println("Initializing modem...");
+  modem.restart();
+  // modem.init();
+
+  String modemInfo = modem.getModemInfo();
+  SerialMon.print("Modem Info: ");
+  SerialMon.println(modemInfo);
+
+  // modem.sendSMS("+393312816616", "Hello from TTGO");
+
+  Serial.println("Configuring WiFi...");
+  WiFi.config(staticIP, gateway, subnet);
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(ssid, password);
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  TSinit();
+
+  timer = timerBegin(1000000);  //timer resolution - 1Mhz
+  timerAttachInterrupt(timer, &timer_callback);
+  // Set alarm to call onTimer function every second (value in microseconds).
+  // Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+  timerAlarm(timer, 125, true, 0);  // repeat timer every 1/8000hz; unit is in useconds, thus 125 instead of 0.000125
+
+
+
+  if (adc1_config_width(ADC_WIDTH_BIT_12) != ESP_OK){
+    Serial.println("cannot configure adc width!!!");
+    delay(5000);
+  }
+  adc1_config_channel_atten(ADC1_CHANNEL_5,ADC_ATTEN_DB_6); //gpio pin 36
+
+  // SerialMon.write("Sending AT command...\r\n");
+  // SerialAT.print("ATD3312816616\r\n");
+  // pinMode(AUDIOPIN_OUT, OUTPUT);
+  // ledcAttach(AUDIOPIN_OUT, 24000, 8);
+  dac_output_enable(DAC_CHANNEL_1);
+
+  set_voice_paths();
+
+  xTaskCreatePinnedToCore(
+      taskloop, /* Function to implement the task */
+      "getdata", /* Name of the task */
+      10000,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      0,  /* Priority of the task */
+      &Task1,  /* Task handle. */
+      0); /* Core where the task should run */
+
+}
+
+
+void taskloop(void * parameter){
+  printf("started task loop\n");
+
+  int answer_len=0; //to read answer to commands sent to gsm modem
+  int read=0;
+  for (;;) {
+    //get, execute cmd
+    read = 0;
+    WiFiClient client = cmdServer.available();
+    int canBreak=0;
+    String input;
+    while (client.connected()) //TODO
+      if (client.available()){
+        printf("GOT CLIENT\n");
+        printf("EXECUTING: ");
+        read = client.read((uint8_t*)bufferloopcmd, BUFFERLOOPSIZE);
+
+        // if (read){
+          if (strncmp(bufferloopcmd, "RNSTART", 7) == 0){
+            printf("SETTING recording_noise TO 1\n");
+            recording_noise = 1;
+          }
+          if (strncmp(bufferloopcmd, "RNSTOP", 6) == 0){
+            printf("SETTING recording_noise TO 0\n");
+            recording_noise = 0;
+          }
+          
+
+          if (strncmp(bufferloopcmd, "!STOPTEXT!", 10) == 0){
+            SerialAT.write(26);
+          }
+
+          for (int i=0; i<read; i++){
+            printf("%c,", bufferloopcmd[i]);
+            SerialAT.write(bufferloopcmd[i]);
+          }
+          // if (bufferloopcmd[read-1] != '\n'){
+          printf("\n");
+          SerialAT.write("\n");
+          // }
+          //read answer and send output
+          unsigned long timeout = millis() + 100; // wait up to 'timeout' ms
+
+          while (millis() < timeout || SerialAT.available()) {
+            while (SerialAT.available()){
+              input = SerialAT.readString();
+              // refresh timeout
+              timeout = millis() + 100;
+            }
+          }
+
+          //send answer
+          if (input.length() > 0){
+            printf("OUTPUT OF COMMAND:\n%s\n", input);
+            printf("*** END ***\n");
+            client.write(input.c_str(), input.length());
+            // send_cmd_output(serial_buffer); //todo check return value
+          } else {
+            printf("NO OUTPUT FOR COMMAND\n");
+          }
+
+          break;
+      // }
+    }
+
+    // check data from modem
+    while (SerialAT.available()) {
+      String _input = SerialAT.readString();
+      SerialMon.write(_input.c_str());
+      parse_serial(_input.c_str()+2);
+    }
+
+    while (SerialMon.available()){
+      char c = SerialMon.read();
+      SerialMon.print(".");
+      SerialMon.print(c);
+      SerialAT.write(c);
+    }
+
+  }
+}
+
+
+void play_wolverine() {  //FIXME
+  printf("[DEBUG] playing 'wolverine!'\n");
+  int time2sleep = 1000000 / 8000;
+  for (int i = 0; i < sizeof(audio_data); i++) {
+    //printf("%i,", audio_data[i]);
+    //analogWrite(AUDIOPIN, audio_data[i]);
+    auto t1 = micros();
+    // ledcWrite(AUDIOPIN_OUT, audio_data[i] >> 1); // dividiamo perche' altrimenti si spegne tutto
+    dac_output_voltage(DAC_CHANNEL_1, audio_data[i]);
+    // pwm_out.pulse_perc((audio_data[i]/255.0f) * 100);
+    auto t2 = micros();
+    delayMicroseconds(time2sleep - (t2 - t1));
+    //delayMicroseconds(125 - (t2-t1));
+  }
+  // ledcWrite(AUDIOPIN_OUT, 0); 
+  dac_output_voltage(DAC_CHANNEL_1, 0);
+  // pwm_out.pulse_perc(0);
+  printf("\n");
+
+}
+
+uint8_t val = 0;
+
+size_t last_at_time = time(NULL);
+
+void loop() {
+
+  if(call_in_progress || recording_noise){
+
+    // printf("[DEBUG] call in progress\n");
+    int ts1 = millis();
+    int tmp = -1;
+    portENTER_CRITICAL(&timerMuxS);
+    tmp = audio2send_pos_w;
+    portEXIT_CRITICAL(&timerMuxS);
+    int audio2send = audio2send_sent < tmp ? (tmp - audio2send_sent)%max_audio2send : (audio2send_buffer_sz - audio2send_sent + tmp)%max_audio2send;
+
+    int audio2sendbk = audio2send;
+    if (audio2send > 256){
+      justsent = 1;
+      if (audio2send_sent + audio2send >= audio2send_buffer_sz){
+        // printf("[DEBUG] sending %i\n", audio2send_buffer_sz - audio2send_sent);
+        send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send_buffer_sz - audio2send_sent);
+
+        audio2send = audio2send - (audio2send_buffer_sz - audio2send_sent);
+        audio2send_sent = 0;
+
+      }
+      send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send);
+
+      audio2send_sent = (audio2send_sent + audio2send) % audio2send_buffer_sz;
+    }
+    
+    int ts2 = millis();
+  }
+
+  //get audio data
+  if (call_in_progress){
+
+    int new_audio_len = get_audio_data(bufferloop);
+    if (new_audio_len>0) {
+        portENTER_CRITICAL(&timerMux);
+        data2copy = buf_sz - audio_buffer_pos > new_audio_len ? new_audio_len : buf_sz - audio_buffer_pos;
+
+        memcpy(&(audio_buffer[audio_buffer_pos]), bufferloop, data2copy);
+
+        audio_buffer_pos += data2copy;
+        audio_buffer_pos = audio_buffer_pos % buf_sz;
+        portEXIT_CRITICAL(&timerMux);
+        
+        if (data2copy < new_audio_len){
+          portENTER_CRITICAL(&timerMux);
+          memcpy(&(audio_buffer[audio_buffer_pos]), &(bufferloop[data2copy]), new_audio_len-data2copy);
+          
+          audio_buffer_pos += new_audio_len - data2copy;
+          portEXIT_CRITICAL(&timerMux);
+        }
+
+    }
+  }
+
+
+    // while (SerialAT.available()) {
+    //   String input = SerialAT.readString();
+    //   SerialMon.write(input.c_str());
+
+    //   // int cmp = strncmp("RING", input.c_str(), 6);
+    //   if (input.substring(2,6) == "RING"){ 
+    //     set_voice_paths();
+       
+    //     SerialAT.write("ATA\r\n");
+
+    //     sleep(3);
+    //     play_wolverine(); 
+    //   }
+
+
+    // }
+
+    // while (SerialMon.available()){
+    //   String input = SerialMon.readString();
+    //   for(size_t i = 0; i < input.length(); i++){
+    //     SerialMon.print(".");
+    //     SerialMon.print(input[i]);
+    //   }
+    //   SerialAT.write(input.c_str());
+    // }
+
+    if (time(NULL) > last_at_time + 60){
+      printf("sending AT to keep alive...\n");
+      SerialAT.write("AT\r\n");
+      last_at_time = time(NULL);
+    }
+
+
+}
