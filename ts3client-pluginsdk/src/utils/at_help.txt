@@ -4,9 +4,10 @@ phonebook <create|read|delete> <params>: if "create", params are [index], <name>
 text: <send|read|delete> <params>: if "send", params are <number> and <text>
 				     if "read", param is <index>
 				     if "delete", params are <index> and [flag]; if flag is "read", deletes all read messages; if flag is "all", deletes all messages
+					 (no feedback is given when using flags)
+call <number>: make a call
 hang: hangs the calls
 network: shows stats about the network
 pb_mode [true|false]: if false, accept any call; otherwise, accepts only if the number is saved in the phonebook
 mynumber: shows my number
-noise: record noise for noise removal algorithm
 help: displays this help
