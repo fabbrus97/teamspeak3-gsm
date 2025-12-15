@@ -165,8 +165,8 @@ int ts3plugin_init() {
 
 	printf("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s\n", appPath, resourcesPath, configPath, pluginPath);
 
-	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
-    // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
+	printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
+    raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
 
 	// connect to server
 // 	char** identity;
