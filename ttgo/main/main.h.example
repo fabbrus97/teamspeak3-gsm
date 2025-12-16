@@ -1,0 +1,2 @@
+char* ssid = ""; //insert your ssid;
+const char* password =  ""; // insert your pwd;
