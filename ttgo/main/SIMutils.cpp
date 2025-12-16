@@ -1,5 +1,7 @@
 #include "SIMutils.hpp"
 
+int ACCEPT_ONLY_PB = 0;
+
 int call_in_progress = 0; 
 int recording_noise = 0; 
 // extern SoftwareSerial GPRS(3, 2);
@@ -29,7 +31,7 @@ int check_caller_in_pb(const char* str){
   
   }
   // Serial.println("found anything :-(");
-  return 1;// TODO ret_value;
+  return ret_value;
 }
 
 void parse_serial(const char* str){

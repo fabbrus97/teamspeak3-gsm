@@ -9,5 +9,4 @@ call <number>: make a call
 hang: hangs the calls
 network: shows stats about the network
 pb_mode [true|false]: if false, accept any call; otherwise, accepts only if the number is saved in the phonebook
-mynumber: shows my number
 help: displays this help
