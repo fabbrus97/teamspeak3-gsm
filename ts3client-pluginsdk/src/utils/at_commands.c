@@ -5,8 +5,6 @@
 
 #include "at_commands.h"
 
-#include <dirent.h> //TODO PER DEBUG
-
 
 char* start_command = "RNSTART"; //record noise start
 char* stop_command = "RNSTOP"; //record noise stop
@@ -420,23 +418,6 @@ void at_init(char* server, int port){
 }
 
 char* at_help(){
-    // DIR *dp;
-    // struct dirent *ep;     
-    // dp = opendir ("./");
-    // if (dp != NULL)
-    // {
-    //     while ((ep = readdir (dp)) != NULL)
-    //     puts (ep->d_name);
-            
-    //     (void) closedir (dp);
-    //     return 0;
-    // }
-    // else
-    // {
-    //     perror ("Couldn't open the directory");
-    //     return -1;
-    // }
-
     char* buffer = malloc(700);
     FILE* helptext = fopen("at_help.txt", "r");
     fread(buffer, 700, sizeof(char), helptext);
