@@ -486,7 +486,7 @@ int at_process_command(const char* command, char** output){
                 printf("[DEBUG] checking if it is a read: %i\n", strcmp(param1, "read"));
 
                 if (param2 && param3 && param4){ //update a contact in position "param2"
-                    if (strcmp(param1, "create") == 0){
+                    if (strcmp(param1, "create") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for edit contact!\n");
                         at_send_command(cmd_str = phonebook_api.create(param2, param3, param4), output);
                         break;
@@ -494,11 +494,11 @@ int at_process_command(const char* command, char** output){
                 }
 				else if (param2 && param3){
                     printf("[DEBUG] got param2 & param3!\n");
-                    if (strcmp(param1, "create") == 0){
+                    if (strcmp(param1, "create") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for create contact!\n");
                         at_send_command(cmd_str = phonebook_api.create(NULL, param2, param3), output);
                         break;
-                    } else if (strcmp(param1, "update") == 0){
+                    } else if (strcmp(param1, "update") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for update contact!\n");
                         at_send_command(cmd_str = phonebook_api.update(param2, param3), output);
                         break;
@@ -509,7 +509,7 @@ int at_process_command(const char* command, char** output){
                         break;
                     }
                 } else if (param2){
-                    if (strcmp(param1, "delete") == 0){
+                    if (strcmp(param1, "delete") == 0 && allow_delete_contacts){
                         printf("[DEBUG] match for delete contact!\n");
                         at_send_command(cmd_str = phonebook_api.del(param2), output);
                         break;
@@ -520,10 +520,10 @@ int at_process_command(const char* command, char** output){
         case CMD_TEXT:
             if (param1){
                 if (param2 && param3){
-                    if (strcmp(param1, "delete") == 0){
+                    if (strcmp(param1, "delete") == 0 && allow_delete_sms){
                         at_send_command(cmd_str = text_api.del(param2, param3), output);
                         break;
-                    } else if (strcmp(param1, "send") == 0){
+                    } else if (strcmp(param1, "send") == 0 && allow_send_sms){
                         
                         char** _cmd_list = at_set_text_mode(1);
                         cmd_list = _cmd_list;
@@ -561,7 +561,7 @@ int at_process_command(const char* command, char** output){
                     }
                 }
                 else if (param2){
-                    if (strcmp(param1, "delete") == 0){
+                    if (strcmp(param1, "delete") == 0 && allow_delete_sms){
                         at_send_command(cmd_str = text_api.del(param2, NULL), output);
                         break;
                     }
@@ -606,7 +606,7 @@ int at_process_command(const char* command, char** output){
         case CMD_CALL_MAKE:
             
             
-            if (param1){
+            if (param1 && allow_make_call){
                 at_send_command(at_call_make(param1), NULL);
                 break;
             }
