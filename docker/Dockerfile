@@ -98,6 +98,7 @@ COPY docker/xorg.conf /etc/X11/xorg.conf
 
 WORKDIR /app
 RUN make
+RUN cp /app/utils/at_help.txt /TeamSpeak3-Client-linux_amd64/
 
 # audio and dbus setup
 RUN dbus-uuidgen > /etc/machine-id

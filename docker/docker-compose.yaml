@@ -12,11 +12,12 @@ services:
       - "8078:8000/udp"
     env_file: ".env"
     healthcheck:
-      test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
+      #test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
+      test: ["CMD-SHELL", "ls -l /proc/$(pgrep ts3client)/fd | grep -q 'server.txt' || exit 1"] 
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 90s
 
 # volumes:
 #  ts3_config:

@@ -21,6 +21,11 @@ extern int noise_cancelnoise; //active noise canceling algorithm for audio incom
 extern char* noise_noiseprofilefile; //where to save the noise computed profile
 extern char* noise_noiserecordingfile; //raw recorded audio noise file (audio from the ucontroller)
 extern int noise_suppr_level;
+extern int allow_send_sms;
+extern int allow_delete_sms;
+extern int allow_make_call;
+extern int allow_create_contacts;
+extern int allow_delete_contacts;
 
 void load_settings();
 

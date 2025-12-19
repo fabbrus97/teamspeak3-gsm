@@ -16,6 +16,11 @@ int noise_cancelnoise;
 char* noise_noiseprofilefile;
 char* noise_noiserecordingfile;
 int noise_suppr_level;
+int allow_send_sms;
+int allow_delete_sms;
+int allow_make_call;
+int allow_create_contacts;
+int allow_delete_contacts;
 
 void load_variables(){
 
@@ -53,6 +58,11 @@ void load_variables(){
 	char* ini_noise_noiseprofilefile;
 	char* ini_noise_noiserecordingfile;
 	char* ini_noise_noisesupprlevel;
+	int ini_allow_send_sms;
+	int ini_allow_delete_sms;
+	int ini_allow_make_call;
+	int ini_allow_create_contacts;
+	int ini_allow_delete_contacts;
 
 	ini = iniparser_load(fullpath);
     if (ini==NULL) {
@@ -84,6 +94,11 @@ void load_variables(){
 	ini_noise_noiseprofilefile = iniparser_getstring(ini, "noise:noiseprofilefile", noiseprofile_fullpath);
 	ini_noise_noiserecordingfile = iniparser_getstring(ini, "noise:noiserecordingfile", noiserecording_fullpath);
 	ini_noise_noisesupprlevel = iniparser_getstring(ini, "noise:noisesupprlevel", 6);
+	ini_allow_send_sms = iniparser_getint(ini, "permissions:allow_send_sms", 0);
+	ini_allow_delete_sms = iniparser_getint(ini, "permissions:allow_delete_sms", 0);
+	ini_allow_make_call = iniparser_getint(ini, "permissions:allow_make_call", 0);
+	ini_allow_create_contacts = iniparser_getint(ini, "permissions:allow_create_contacts", 0);
+	ini_allow_delete_contacts = iniparser_getint(ini, "permissions:allow_delete_contacts", 0);
 
 	//then check env variables
 	const char* env_channel = getenv("TSGSM_TSCHANNEL"); // Get the value of $HOME
@@ -96,6 +111,11 @@ void load_variables(){
 	const char* env_noise_noiseprofilefile = getenv("TSGSM_NOISE_PROFILEPATH");
 	const char* env_noise_noiserecordingfile = getenv("TSGSM_NOISE_RECORDINGPATH");
 	const int* env_noise_noisesupprlevel = getenv("TSGSM_NOISE_SUPPRLEVEL");
+	const int env_allow_send_sms = getenv("TSGSM_ALLOW_SEND_SMS");
+	const int env_allow_delete_sms = getenv("TSGSM_ALLOW_DELETE_SMS");
+	const int env_allow_make_call = getenv("TSGSM_ALLOW_MAKE_CALL");
+	const int env_allow_create_contacts = getenv("TSGSM_ALLOW_CREATE_CONTACTS");
+	const int env_allow_delete_contacts = getenv("TSGSM_ALLOW_DELETE_CONTACTS");
 
 
 	ucontroller_cmd_port = env_ucontroller_at_port == NULL ? ini_ucontroller_at_port : atoi(env_ucontroller_at_port); 
@@ -124,6 +144,12 @@ void load_variables(){
 		strcpy(noise_noiserecordingfile, ini_noise_noiserecordingfile);
 	}
 	noise_suppr_level = env_noise_noisesupprlevel != NULL ? env_noise_noisesupprlevel : ini_noise_noisesupprlevel;
+
+	allow_send_sms = env_allow_send_sms != NULL ? env_allow_send_sms : ini_allow_send_sms;
+	allow_delete_sms = env_allow_delete_sms != NULL ? env_allow_delete_sms : ini_allow_delete_sms;
+	allow_make_call = env_allow_make_call != NULL ? env_allow_make_call : ini_allow_make_call;
+	allow_create_contacts = env_allow_create_contacts != NULL ? env_allow_create_contacts : ini_allow_create_contacts;
+	allow_delete_contacts = env_allow_delete_contacts != NULL ? env_allow_delete_contacts : ini_allow_delete_contacts;
 
 	iniparser_freedict(ini);
 
