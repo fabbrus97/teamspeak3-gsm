@@ -1,6 +1,11 @@
 /*
- * TeamSpeak 3 demo plugin
- *
+ * TS GSM
+ * Simone Fabbri
+ * <fabbrus@gmail.com> 
+ * 19/12/2025
+ * 
+ * 
+ * From ts demo
  * Copyright (c) TeamSpeak Systems GmbH
  */
 
@@ -216,7 +221,7 @@ void* main_loop_play(void* args){
 
 	struct timespec myts;
 	myts.tv_sec=0;
-	myts.tv_nsec = bytes2play*1000000000/8000;
+	myts.tv_nsec = bytes2play*(1000000000/8000);
 
 	short chunk[bytes2play];
 	struct timespec ts;
@@ -435,12 +440,12 @@ void* main_loop_acquire(void* args){
 
 		receivedBytes = receive_data(&mybuffer);
 
-		printf("[DEBUG] i'm gonna fucking wait on noise_sem\n");
+		// printf("[DEBUG] i'm gonna fucking wait on noise_sem\n");
 		sem_wait(&noise_sem);
-		printf("[DEBUG] finally the wait is over\n");
+		// printf("[DEBUG] finally the wait is over\n");
 
 		if(noise_cancelnoise && !recording_noise){
-			printf("[DEBUG] I'm in the if 1!\n");
+			// printf("[DEBUG] I'm in the if 1!\n");
 
 			// noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
 			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
@@ -449,7 +454,7 @@ void* main_loop_acquire(void* args){
 
 		} else if (recording_noise){
 
-			printf("[DEBUG] recorded_noise_samples: %i/%i\n", recorded_noise_samples, 30*8000);
+			// printf("[DEBUG] recorded_noise_samples: %i/%i\n", recorded_noise_samples, 30*8000);
 			FILE* noisetmp = fopen(noisefilepathtmp, "a");
 			
 			// printf("[DEBUG] noisefilepathtmp is %s\n", noisefilepathtmp);
@@ -461,11 +466,11 @@ void* main_loop_acquire(void* args){
 			fclose(noisetmp);
 
 		}
-		printf("[DEBUG] I'm gonna release noise_sem\n");
+		// printf("[DEBUG] I'm gonna release noise_sem\n");
 
 		sem_post(&noise_sem);
 
-		printf("[DEBUG] noise_sem is free\n");
+		// printf("[DEBUG] noise_sem is free\n");
 
 
 
@@ -478,7 +483,7 @@ void* main_loop_acquire(void* args){
 			}
 			sem_post(&c_pb_sem);
 			// printf("[DEBUG] cannot write to buffer because not ready\n");
-			printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
+			// printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
 
 			// usleep(200);
 		}
