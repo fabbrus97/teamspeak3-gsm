@@ -16,11 +16,11 @@ int noise_cancelnoise;
 char* noise_noiseprofilefile;
 char* noise_noiserecordingfile;
 int noise_suppr_level;
-int allow_send_sms;
-int allow_delete_sms;
-int allow_make_call;
-int allow_create_contacts;
-int allow_delete_contacts;
+int allow_send_sms=1;
+int allow_delete_sms=1;
+int allow_make_call=1;
+int allow_create_contacts=1;
+int allow_delete_contacts=1;
 
 void load_variables(){
 
@@ -111,11 +111,11 @@ void load_variables(){
 	const char* env_noise_noiseprofilefile = getenv("TSGSM_NOISE_PROFILEPATH");
 	const char* env_noise_noiserecordingfile = getenv("TSGSM_NOISE_RECORDINGPATH");
 	const int* env_noise_noisesupprlevel = getenv("TSGSM_NOISE_SUPPRLEVEL");
-	const int env_allow_send_sms = getenv("TSGSM_ALLOW_SEND_SMS");
-	const int env_allow_delete_sms = getenv("TSGSM_ALLOW_DELETE_SMS");
-	const int env_allow_make_call = getenv("TSGSM_ALLOW_MAKE_CALL");
-	const int env_allow_create_contacts = getenv("TSGSM_ALLOW_CREATE_CONTACTS");
-	const int env_allow_delete_contacts = getenv("TSGSM_ALLOW_DELETE_CONTACTS");
+	const char* env_allow_send_sms = getenv("TSGSM_ALLOW_SEND_SMS");
+	const char* env_allow_delete_sms = getenv("TSGSM_ALLOW_DELETE_SMS");
+	const char* env_allow_make_call = getenv("TSGSM_ALLOW_MAKE_CALL");
+	const char* env_allow_create_contacts = getenv("TSGSM_ALLOW_CREATE_CONTACTS");
+	const char* env_allow_delete_contacts = getenv("TSGSM_ALLOW_DELETE_CONTACTS");
 
 
 	ucontroller_cmd_port = env_ucontroller_at_port == NULL ? ini_ucontroller_at_port : atoi(env_ucontroller_at_port); 
@@ -145,11 +145,11 @@ void load_variables(){
 	}
 	noise_suppr_level = env_noise_noisesupprlevel != NULL ? env_noise_noisesupprlevel : ini_noise_noisesupprlevel;
 
-	allow_send_sms = env_allow_send_sms != NULL ? env_allow_send_sms : ini_allow_send_sms;
-	allow_delete_sms = env_allow_delete_sms != NULL ? env_allow_delete_sms : ini_allow_delete_sms;
-	allow_make_call = env_allow_make_call != NULL ? env_allow_make_call : ini_allow_make_call;
-	allow_create_contacts = env_allow_create_contacts != NULL ? env_allow_create_contacts : ini_allow_create_contacts;
-	allow_delete_contacts = env_allow_delete_contacts != NULL ? env_allow_delete_contacts : ini_allow_delete_contacts;
+	allow_send_sms = env_allow_send_sms != NULL ? atoi(env_allow_send_sms) : ini_allow_send_sms;
+	allow_delete_sms = env_allow_delete_sms != NULL ? atoi(env_allow_delete_sms) : ini_allow_delete_sms;
+	allow_make_call = env_allow_make_call != NULL ? atoi(env_allow_make_call) : ini_allow_make_call;
+	allow_create_contacts = env_allow_create_contacts != NULL ? atoi(env_allow_create_contacts) : ini_allow_create_contacts;
+	allow_delete_contacts = env_allow_delete_contacts != NULL ? atoi(env_allow_delete_contacts) : ini_allow_delete_contacts;
 
 	iniparser_freedict(ini);
 
