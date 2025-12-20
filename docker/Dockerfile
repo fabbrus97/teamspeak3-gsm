@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y \
     gcc \
     build-essential
 
+# Install for debugging
+RUN apt-get update && apt-get install -y \
+    x11vnc
+
 #other dependencies suggested by chatgpt for ts
 RUN apt-get update && apt-get install -y \
     libasound2 \
@@ -98,7 +102,7 @@ COPY docker/xorg.conf /etc/X11/xorg.conf
 
 WORKDIR /app
 RUN make
-RUN cp /app/utils/at_help.txt /TeamSpeak3-Client-linux_amd64/
+RUN cp /app/src/utils/at_help.txt /TeamSpeak3-Client-linux_amd64/
 
 # audio and dbus setup
 RUN dbus-uuidgen > /etc/machine-id

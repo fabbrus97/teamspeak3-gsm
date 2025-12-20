@@ -16,7 +16,7 @@ export PULSE_SERVER=unix:/tmp/pulse.sock
 # Wait for PulseAudio socket
 for i in {1..20}; do
   if [ -S /tmp/pulse.sock ]; then break; fi
-  echo "Waiting for PulseAudio..."
+  echo "[INFO] Waiting for PulseAudio..."
   sleep 0.5
 done
 
@@ -24,18 +24,30 @@ pkill -f Xorg
 rm -f /tmp/.X99-lock
 rm -rf /tmp/.X11-unix/X99
 # Start Xorg in the background
-Xorg :99 -ac -noreset +extension GLX +extension RANDR +extension RENDER -logfile /tmp/xorg.log -config /etc/X11/xorg.conf &
-
+Xorg :99 -ac -noreset +extension GLX +extension RANDR +extension RENDER -logfile /tmp/xorg.log -config /etc/X11/xorg.conf & #-screen 0 800x600x24 &
 export DISPLAY=:99 
+
 
 # Wait for X to be ready
 for i in {1..20}; do
-  if xdpyinfo -display :99 > /dev/null 2>&1; then break; fi
-  echo "Waiting for Xorg..."
+  if xdpyinfo -display $DISPLAY > /dev/null 2>&1; then break; fi
+  echo "[INFO] Waiting for Xorg..."
   sleep 0.5
 done
 
-echo "[INFO] pulse and x OK, waiting before starting ts..."
+echo "[INFO] pulse and x OK, starting vnc"
+# XAUTHLOCALHOSTNAME=localhost x11vnc -display $DISPLAY -nopw -forever -shared &
+x11vnc -display $DISPLAY -nopw -forever -shared &
+pid=$!
+
+sleep 1
+
+if ! kill -0 "$pid" 2>/dev/null; then
+  echo "[ERROR] x11vnc failed to start"
+  exit 1
+fi
+
+echo "[INFO] $(date) waiting before starting ts..."
 # Launch TS3
 sleep 90 #wait some time to not DOS the server
 mkdir -p /root/.ts3client
@@ -54,7 +66,7 @@ cd /TeamSpeak3-Client-linux_amd64/
 echo "[INFO] starting ts..."
 if ! [ -f /root/.ts3client/settings.db ]
 then
-  ./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=BOOTYCALL&channel=Generico" &
+  ./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=$TS_NICKNAME&channel=$TS_CHANNEL" &
   sleep 3
   pkill ts3client_linux
 fi
@@ -68,5 +80,5 @@ then
   cp /app/settings.db /root/.ts3client/
 fi
 echo "[INFO] starting TS again"
-./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=BOOTYCALL&channel=Generico"
+./ts3client_linux_amd64 --no-sandbox "ts3server://$TS_URL?port=9987&nickname=$TS_NICKNAME&channel=$TS_CHANNEL"
 

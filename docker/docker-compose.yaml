@@ -10,10 +10,11 @@ services:
       # - ts3_config:/root/.ts3client
     ports:
       - "8078:8000/udp"
+      - 5900:5900
     env_file: ".env"
     healthcheck:
       #test: ["CMD", "sh", "-c", "</dev/tcp/localhost/8000"]
-      test: ["CMD-SHELL", "ls -l /proc/$(pgrep ts3client)/fd | grep -q 'server.txt' || exit 1"] 
+      test: ["CMD-SHELL", "ls -l /proc/$$(pgrep ts3client)/fd | grep -q 'server.txt' || exit 1"] 
       interval: 30s
       timeout: 10s
       retries: 3
