@@ -428,7 +428,7 @@ void* main_loop_acquire(void* args){
 		// printf("my thread id is %i\n", self);
 
 		sem_wait(&noise_sem);
-		printf("[DEBUG] recording_noise: %i\n", recording_noise);
+		//printf("[DEBUG] recording_noise: %i\n", recording_noise);
 		if (!recording_noise && wasIrecordingBefore){
 			
 			rename(noisefilepathtmp, noisefinalpath);
