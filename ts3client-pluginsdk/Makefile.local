@@ -5,6 +5,7 @@
 OUTPUT = "${HOME}/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so"
 # CFLAGS = -c -O2 -Wall -fPIC
 CFLAGS = -c -g -O0 -fPIC -Wall # -w
+SPICIER_CFLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Wstringop-overflow -Wstringop-truncation -g -c -fPIC
 CONFIG_PATH = "${HOME}/.config/teamspeak-gsm"
 # all: config test_plugin
 all: test_plugin
@@ -19,20 +20,20 @@ test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o
 #-lcoap-3-notls 
 
 plugin.o: ./src/plugin.c
-	gcc -Iinclude src/plugin.c $(CFLAGS)
+	gcc -Iinclude src/plugin.c $(SPICIER_CFLAGS)
 
 server.o: ./src/server.c
-	gcc -Iinclude -I/usr/include/soxr src/server.c $(CFLAGS)
+	gcc -Iinclude -I/usr/include/soxr src/server.c $(SPICIER_CFLAGS)
 # -I/usr/include/coap3 -lcoap-3-notls 
 
 settings.o: ./src/settings.c
-	gcc -Iinclude -I/usr/include/iniparser src/settings.c $(CFLAGS)
+	gcc -Iinclude -I/usr/include/iniparser src/settings.c $(SPICIER_CFLAGS)
 
 at_commands.o: ./src/utils/at_commands.c
-	gcc -Isrc/utils src/utils/at_commands.c $(CFLAGS)
+	gcc -Isrc/utils src/utils/at_commands.c $(SPICIER_CFLAGS)
 
 noise_clean.o: ./src/utils/noise_clean.c
-	gcc -Iinclude src/utils/noise_clean.c ${CFLAGS}
+	gcc -Iinclude src/utils/noise_clean.c ${SPICIER_CFLAGS}
 
 clean:
 	rm -rf *.o /home/simone/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so
