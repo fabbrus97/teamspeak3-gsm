@@ -34,7 +34,7 @@
 // int resolve_address(const char *host, const char *service, coap_address_t *dst);
 // void* resps_hndl(coap_context_t *context, coap_session_t *session, coap_pdu_t *sent, coap_pdu_t *received, const coap_mid_t id);
 int connect_to_coap_server();
-int send_voice(short* samples, int sample_counter, int channels);
+int send_voice(short* samples, int sample_counter);
 int observe_voice(void* callback, unsigned char* data);
 int start_udp_socket();
 void receive_and_play_voice(void*  args);
