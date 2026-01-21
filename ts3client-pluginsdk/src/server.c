@@ -3,15 +3,11 @@
 #define UDP_SIZE 512
 
 
-static unsigned int token_obs = 0;
 sem_t sem_voice_buffer;
-static int have_response = 0;
-static short* voice_buffer;
-static int sample_counter = 0;
 int socket_desc;
 struct sockaddr_in server_addr, client_addr;
 char /* server_message[2000], */ client_message[2000];
-int client_struct_length; // = sizeof(client_addr);
+socklen_t client_struct_length; // = sizeof(client_addr);
 
 int start_udp_socket(){
 
@@ -66,52 +62,6 @@ void convert_short_to_uint8(short * samples, int count, uint8_t* out){
  }
 }
 
-void convert_short_to_uint8_old(short * samples, int count, uint8_t* out){
-  uint8_t uint8Value = 0;
-  int pos=0;
-  for (int i = 0; i < count; i++){
-  //   if (samples[i] < 0) uint8Value = (uint8_t)(((127.0)*(1 - (samples[i] / -32767.0))));
-  //   else uint8Value = (uint8_t)((127*(samples[i]/32767.0)) + 128); ///65536.0)));
-  //    out[i] = uint8Value;
-  //    printf("read %i -> %i\n", samples[i], uint8Value);
-  //  }
-    uint8_t byte1 = samples[i] & 0xFF;
-    uint8_t byte2 = ((samples[i] >> 8) & 0xFF);
-    out[pos] = byte1; out[pos+1] = byte2;
-    pos+=2;
- }
-}
-
-/*
-void downsample_soxr(short* ibuffer, short* obuffer, int ilen, int olen) {
-    // Set input and output rates
-    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
-
-    // Create a SoXR resampler
-    soxr_t resampler = soxr_create(ISIZE, OSIZE, 1, NULL, &ioSpec, NULL, NULL);
-
-    // Determine input and output buffer sizes
-    // int obuf_size = (size_t)(ilen * OSIZE / ISIZE + .5);
-    // printf("soxr: input size is %i, output size is %i\n", ilen, obuf_size);
-    printf("soxr: allocating memory\n");
-    // obuffer = (short*)malloc(sizeof(short) * obuf_size);
-
-    size_t idone, odone;
-    soxr_error_t error;
-
-    printf("soxr: resampling...\n");
-    error = soxr_process(resampler, ibuffer, ilen, &idone, obuffer, olen, &odone);
-    printf("soxr: done\n");
-
-    if (error) {
-      fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));
-      obuffer = NULL;
-    }
-
-    // Clean up
-    soxr_delete(resampler);
-}
-*/
 
 // Function to apply gain reduction to audio samples
 void apply_gain(short* samples, size_t num_samples, double gain) {
@@ -122,17 +72,12 @@ void apply_gain(short* samples, size_t num_samples, double gain) {
 }
 
 
-int send_voice(short* samples, int sample_counter, int channels){
-
-    //TODO bugs:
-    // 2. e' capitato che arrivasse dell'audio, ma quello che e' stato spedito con udp non e' stato ricevuto correttamente (es. 30 secondi di audio sono diventati 3 secondi di rumore indistinto)
-    // nota: potrebbe essere a causa di sleep e print che hanno rallentato troppo l'esecuzione e non hanno permesso l'invio corretto dei dati
-
+int send_voice(short* samples, int sample_cnt){
 
     // IP address and port
 
-    // float fsamples[sample_counter];
-    // for (int i = 0; i < sample_counter; i++){
+    // float fsamples[sample_cnt];
+    // for (int i = 0; i < sample_cnt; i++){
     //     fsamples[i] = (float)samples[i];
     // }
 
@@ -148,15 +93,15 @@ int send_voice(short* samples, int sample_counter, int channels){
     //   return 0;
 
     // printf("input data (48khz): ");
-    // for (int i = 0; i < sample_counter; i++){
+    // for (int i = 0; i < sample_cnt; i++){
     //     printf("%i,", samples[i]);
     // }
     // printf("\n");
 
 
-    // sample_counter = sample_counter > 100 ? 100 : sample_counter; //TODO
-    // size_t obuf_size = 500; //(size_t)(sample_counter * OSIZE / (OSIZE+ISIZE) + .5);
-    size_t const obuf_size = (size_t)(sample_counter*OSIZE/ISIZE + .5);
+    // sample_cnt = sample_cnt > 100 ? 100 : sample_cnt; //TODO
+    // size_t obuf_size = 500; //(size_t)(sample_cnt * OSIZE / (OSIZE+ISIZE) + .5);
+    size_t const obuf_size = (size_t)(sample_cnt*OSIZE/ISIZE + .5);
 
     short downsampled[obuf_size];
     // uint8_t tmp[UDP_SIZE];
@@ -167,14 +112,14 @@ int send_voice(short* samples, int sample_counter, int channels){
     // printf("send_voice: trying to add the payload\n");
     
     // printf("downsampling discarding a sample every n\n");
-    // for (int i = 0, j=0; i < sample_counter; i+=ISIZE/OSIZE, j++ ){
+    // for (int i = 0, j=0; i < sample_cnt; i+=ISIZE/OSIZE, j++ ){
     //     downsampled[j] = samples[i];
     // }
 
     // printf("downsampling using soxr\n");
 
     // printf("samples[i]: ");
-    // for (int i=0; i < sample_counter; i++){
+    // for (int i=0; i < sample_cnt; i++){
     //     printf("%i,", samples[i]);
     // }
     // printf("\n");
@@ -193,7 +138,7 @@ int send_voice(short* samples, int sample_counter, int channels){
     // error = soxr_process(resampler, samples, ilen, NULL, downsampled, obuf_size, &odone);
 
     error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
-      samples, sample_counter, NULL,                              /* Input. */
+      samples, sample_cnt, NULL,                              /* Input. */
       downsampled, obuf_size, &odone,                             /* Output. */
       &ioSpec, NULL, NULL);                             /* Default configuration.*/
 
@@ -222,16 +167,16 @@ int send_voice(short* samples, int sample_counter, int channels){
     }
 
     uint8_t data[odone];
-    // uint8_t data[sample_counter]; 
+    // uint8_t data[sample_cnt]; 
     
     convert_short_to_uint8(downsampled, odone, data);
     // convert_short_to_uint8(downsampled, obuf_size, data);
-    // convert_short_to_uint8(samples, sample_counter, data);
-    // obuf_size = sample_counter;
+    // convert_short_to_uint8(samples, sample_cnt, data);
+    // obuf_size = sample_cnt;
 
     // printf("done, sending...\n");
 
-    int sent = 0;
+    size_t sent = 0;
     int mycounter = 1;
     while (sent < odone){ //(*odone)*2){
         
@@ -290,28 +235,8 @@ int send_voice(short* samples, int sample_counter, int channels){
     return 0;
 }
 
-void send_command(char* command, size_t len){
-    struct sockaddr_in test_client_addr;
-    memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
-    test_client_addr.sin_family = AF_INET; // IPv4
-    test_client_addr.sin_port = htons(ucontroller_cmd_port); // Port in network byte order
-    inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
-
-    if (sendto(socket_desc, command, len, 0,
-        (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0){
-        fprintf(stderr, "Error in sendto()\n");
-        return 1;
-    }
-}
-
 
 ssize_t receive_data(uint8_t** data){
-    struct timespec read_timeout;
-    read_timeout.tv_sec=0;
-    read_timeout.tv_nsec = 10; //0.1 millisec
-    // printf("setting socket option\n");
-    // setsockopt(socket_desc, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout)); //TODO timeout
-    // printf("done\n");
     ssize_t recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
             (struct sockaddr*)&client_addr, &client_struct_length);
     if (recvBytes <= 0){
@@ -352,17 +277,10 @@ void receive_and_play_voice(void* args){
     for(;;){
         recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
             (struct sockaddr*)&client_addr, &client_struct_length);
-        if (recvBytes < 0){
-            printf("Couldn't receive\n");
-            // return -1;
-            myts.tv_sec=1;
-            nanosleep(&myts, &myts);
-            myts.tv_sec=0;
-            continue;
-        }
+
         printf("Received message from IP: %s and port: %i\n",
               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        printf("message length is %i\n", recvBytes);
+        printf("message length is %li\n", recvBytes);
         short buffer[recvBytes];
 
         /*for (int i=0; i < recvBytes-1; i+=2){
