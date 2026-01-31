@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <semaphore.h>
 #include "../plugin.h"
+#include "clog.h"
 
 #include "../settings.h"
 

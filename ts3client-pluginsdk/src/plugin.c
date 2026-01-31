@@ -19,7 +19,7 @@
 #include <string.h>
 #include <assert.h>
 #include "teamspeak/public_errors.h"
-#include "teamspeak/public_errors_rare.hh"
+#include "teamspeak/public_errors_rare.h"
 #include "teamspeak/public_definitions.h"
 #include "teamspeak/public_rare_definitions.h"
 #include "teamspeak/clientlib_publicdefinitions.h"
@@ -147,6 +147,22 @@ int ts3plugin_init() {
 	char pluginPath[PATH_BUFSIZE];
 
     /* Your plugin init code here */
+	// clog_set_level(CLOG_ERROR);
+	clog_level_t clog_min_level = CLOG_TRACE;
+
+	const char* env_loglevel = getenv("LOGLEVEL");
+
+	if (env_loglevel != NULL) {
+		if (strcasecmp(env_loglevel, "INFO") == 0) {
+
+			clog_set_level(CLOG_INFO);
+		} else if (strcasecmp(env_loglevel, "DEBUG") == 0) {
+			clog_set_level(CLOG_DEBUG);
+		} else if (strcasecmp(env_loglevel, "ERROR") == 0) {
+			clog_set_level(CLOG_ERROR);
+		}
+	}
+
     INFO("PLUGIN: init");
 
 	//load variables
@@ -166,6 +182,9 @@ int ts3plugin_init() {
 	ts3Functions.getPluginPath(pluginPath, PATH_BUFSIZE, pluginID);
 
 	INFO("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s", appPath, resourcesPath, configPath, pluginPath);
+
+	// printf("PID: %d — Waiting for debugger to attach... (send SIGCONT to continue)\n", getpid());
+    // raise(SIGSTOP);  // This will pause the process until SIGCONT is received (e.g., from the debugger)
 
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
