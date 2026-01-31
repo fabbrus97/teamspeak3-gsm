@@ -22,7 +22,7 @@ int allow_make_call=1;
 int allow_create_contacts=1;
 int allow_delete_contacts=1;
 
-void load_variables(){
+void load_settings(){
 
 	//first check the ini file
 	const char* path = "/.config/teamspeak-gsm/settings.ini";
