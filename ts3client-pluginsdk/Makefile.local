@@ -20,7 +20,7 @@ test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o
 #-lcoap-3-notls 
 
 plugin.o: ./src/plugin.c
-	gcc -Iinclude src/plugin.c $(SPICIER_CFLAGS)
+	gcc -O0 -Iinclude src/plugin.c $(SPICIER_CFLAGS)
 
 server.o: ./src/server.c
 	gcc -Iinclude -I/usr/include/soxr src/server.c $(SPICIER_CFLAGS)
