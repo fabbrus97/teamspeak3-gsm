@@ -1,5 +1,6 @@
 #include "server.h"
 #include "ts3_functions.h"
+#include "clog.h"
 #define UDP_SIZE 512
 
 
@@ -20,12 +21,12 @@ int start_udp_socket(){
     socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     if(socket_desc < 0){
-        printf("Error while creating socket\n");
+        ERROR("Error while creating socket");
         return -1;
     }
-    printf("Socket created successfully\n");
+    INFO("Socket created successfully");
 
-    printf("[DEBUG] LISTENING ON PORT %i ON ADDRESS %s\n", ts_audio_port, ts_ip_bind);
+    DEBUG("LISTENING ON PORT %i ON ADDRESS %s", ts_audio_port, ts_ip_bind);
 
     // Set port and IP:
     server_addr.sin_family = AF_INET;
@@ -34,12 +35,12 @@ int start_udp_socket(){
 
     // Bind to the set port and IP:
     if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
-        printf("Couldn't bind to the port\n");
+        ERROR("Couldn't bind to the port");
         return -1;
     }
-    printf("Done with binding\n");
+    INFO("Done with binding");
 
-    printf("Listening for incoming messages...\n\n");
+    INFO("Listening for incoming messages...");
     return 0;
 }
 
@@ -65,156 +66,52 @@ void convert_short_to_uint8(short * samples, int count, uint8_t* out){
 int send_voice(short* samples, int sample_cnt){
 
     // IP address and port
-
-    // float fsamples[sample_cnt];
-    // for (int i = 0; i < sample_cnt; i++){
-    //     fsamples[i] = (float)samples[i];
-    // }
-
     // Initialize sockaddr_in struct
     struct sockaddr_in test_client_addr;
     memset(&test_client_addr, 0, sizeof(test_client_addr)); // Clear the struct
     test_client_addr.sin_family = AF_INET; // IPv4
     test_client_addr.sin_port = htons(ucontroller_audio_port); // Port in network byte order
-    printf("[DEBUG] SENDING AUDIO TO %s:%i\n", ucontroller_address, ucontroller_audio_port);
+    DEBUG("SENDING AUDIO TO %s:%i", ucontroller_address, ucontroller_audio_port);
     inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
 
-    // if (client_addr == NULL) TODO
-    //   return 0;
-
-    // printf("input data (48khz): ");
-    // for (int i = 0; i < sample_cnt; i++){
-    //     printf("%i,", samples[i]);
-    // }
-    // printf("\n");
-
-
-    // sample_cnt = sample_cnt > 100 ? 100 : sample_cnt; //TODO
-    // size_t obuf_size = 500; //(size_t)(sample_cnt * OSIZE / (OSIZE+ISIZE) + .5);
     size_t const obuf_size = (size_t)(sample_cnt*OSIZE/ISIZE + .5);
 
     short downsampled[obuf_size];
-    // uint8_t tmp[UDP_SIZE];
-    //0 means the semaphore is shared between threads
-    //1 is the initial value of the semaphore
-    // sem_init(&sem_voice_buffer, 0, 1);
-
-    // printf("send_voice: trying to add the payload\n");
-    
-    // printf("downsampling discarding a sample every n\n");
-    // for (int i = 0, j=0; i < sample_cnt; i+=ISIZE/OSIZE, j++ ){
-    //     downsampled[j] = samples[i];
-    // }
-
-    // printf("downsampling using soxr\n");
-
-    // printf("samples[i]: ");
-    // for (int i=0; i < sample_cnt; i++){
-    //     printf("%i,", samples[i]);
-    // }
-    // printf("\n");
-
-    // ssize_t *idone = malloc(sizeof(ssize_t)), *odone = malloc(sizeof(ssize_t));
     size_t odone;
     soxr_error_t error;
-
-    // Read from input file
-
-    // printf("output buffer has size %i\n", obuf_size);
-
-    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
-    // soxr_t resampler = soxr_create(ISIZE, OSIZE, 1, &error, &ioSpec, NULL, NULL);
-    // Resample the input buffer
-    // error = soxr_process(resampler, samples, ilen, NULL, downsampled, obuf_size, &odone);
 
     error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
       samples, sample_cnt, NULL,                              /* Input. */
       downsampled, obuf_size, &odone,                             /* Output. */
-      &ioSpec, NULL, NULL);                             /* Default configuration.*/
-
-    // if (error) {
-    //     fprintf(stderr, "Error during resampling: %s\n", soxr_strerror(error));
-    //     return 1;
-    // } 
+      &soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I), NULL, NULL);                             /* Default configuration.*/
     
-    // *odone = obuf_size;
-
-    // printf("output data (48k -> 8k): ");
-    // for (int i = 0; i < obuf_size; i++){
-    //     printf("%i,", downsampled[i]);
-    // }
-    // printf("\n"); 
-    
-    // printf("total size to send: %i expected send: %i\n", (odone), ((odone))/UDP_SIZE);
-
-    // printf("converting to uint8_t\n");
     if (error)
-        printf("there was an error during downsampling\n");
+        ERROR("there was an error during downsampling");
     
     if (odone == 0){
-        printf("downsample: odone is 0\n");
+        DEBUG("downsample: odone is 0");
         return 1;
     }
 
     uint8_t data[odone];
-    // uint8_t data[sample_cnt]; 
     
     convert_short_to_uint8(downsampled, odone, data);
-    // convert_short_to_uint8(downsampled, obuf_size, data);
-    // convert_short_to_uint8(samples, sample_cnt, data);
-    // obuf_size = sample_cnt;
-
-    // printf("done, sending...\n");
 
     size_t sent = 0;
-    while (sent < odone){ //(*odone)*2){
-        
-        
-
+    while (sent < odone){ 
         int available = odone - sent > UDP_SIZE ? UDP_SIZE : odone - sent;
-        // int available = obuf_size - sent > UDP_SIZE ? UDP_SIZE : obuf_size - sent;
         uint8_t tmp[available];
         memcpy(tmp, &(data[sent]), available); 
-        // printf("tmp[i]: ");
-        // for (int i = 0; i < available; i++){
-        //     printf("%i,",tmp[i]);
-        // }
-        // printf("\n");
 
-
-        // if (sendto(socket_desc, data, (*odone), 0,
         if (sendto(socket_desc, tmp, available, 0,
                     (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0)
         {
-            fprintf(stderr, "Error in sendto()\n");
+            ERROR("Error in sendto(): %s", strerror(errno));
             return 1;
         }
 
-        // struct timeval tv1, tv2;
-        // gettimeofday(&tv1, NULL);
-        // long long nanoseconds1 = ((long long)tv1.tv_sec * 1000000LL + (long long)tv1.tv_usec)*1000;
-
-        // printf("trying to reset tmp...\n");
-        // memset(tmp, 0, UDP_SIZE);
-        // printf("done\n");
-
         sent += available;
-
-        // printf("[DEBUG] data sent: %i total: %i\n", sent, obuf_size);
-
-        // gettimeofday(&tv2, NULL);
-        // long long nanoseconds2 = ((long long)tv2.tv_sec * 1000000LL + (long long)tv2.tv_usec)*1000;
-
-        // struct timespec myts;
-        // myts.tv_sec=0;
-        // myts.tv_nsec = available*(10e9)/8000; // - (nanoseconds2 - nanoseconds1);
-        // nanosleep(&myts, &myts);
     }
-
-    // printf("I'm out of for, data sent\n");
-
-    // soxr_delete(resampler);
-
 
     return 0;
 }
@@ -224,30 +121,10 @@ ssize_t receive_data(uint8_t** data){
     ssize_t recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
             (struct sockaddr*)&client_addr, &client_struct_length);
     if (recvBytes <= 0){
-        // printf("DEBUG Couldn't receive or no data\n");
-        // nanosleep(&myts, &myts);
+        // DEBUG("Couldn't receive or no data"); // Commented out to avoid spamming the log
     } else {
-        // printf("got data from socket, bytes: %li\n", recvBytes);
-    
-        // client_message[recvBytes] = '\0';
         *data = malloc(sizeof(uint8_t)*recvBytes);
         memcpy(*data, client_message, recvBytes);
-        // printf("DEBUG i have received the following %i bytes: \n", recvBytes);
-        // for (int i=0; i < recvBytes; i++){
-        //     printf("%i,", client_message[i]);
-        // }
-        // printf("\n");
-        // printf("DEBUG i have copied data and now buffer is: ");
-        // for (int i=0; i < recvBytes; i++){
-        //     printf("%i,", (*data)[i]);
-        // }
-        // printf("\n");
-
-        // if (data == NULL)
-        //     printf("data: aw shit here we go again\n");
-        // else
-        //     printf("data: ok\n");
-
     }
     return recvBytes;
 }
