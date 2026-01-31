@@ -4,22 +4,23 @@ static float mean = 0;
 static int noise_length = 0;
 static int noise_status = UNLOADED;
 
-int compute_file_path(char* path, char* output_path){
+int compute_file_path(char* path, char** output_path){
     char* full_path = malloc(sizeof(char)*1024);
 
     if (path[0] == '~') {
         const char *home = getenv("HOME"); // get home directory
         if (home) {
-            snprintf(full_path, sizeof(full_path), "%s%s", home, path + 1);
+            snprintf(full_path, 1024, "%s%s", home, path + 1);
         } else {
+            free(full_path);
             return 1;
         }
     } else {
-        strncpy(full_path, path, sizeof(full_path));
+        strncpy(full_path, path, 1024);
         full_path[sizeof(full_path)-1] = '\0';
     }
 
-    output_path = full_path;
+    *output_path = full_path;
 
     return 0;
 }
@@ -28,7 +29,7 @@ int compute_file_path(char* path, char* output_path){
 //il path è definito nei valori di default
 int delete_noiseprof_file(){
     char* fullpath = malloc(sizeof(char)*1024);
-    compute_file_path(noise_noiseprofilefile, fullpath);
+    compute_file_path(noise_noiseprofilefile, &fullpath);
     return remove(fullpath);
 }
 
@@ -37,7 +38,7 @@ int delete_noiseprof_file(){
 //salva sempre in append, ricordati di cancellare i vecchi file!    
 int save_noise(uint8_t* raw_audio, size_t n_sample){
     char* fullpath = malloc(sizeof(char)*1024);
-    compute_file_path(noise_noiserecordingfile, fullpath);
+    compute_file_path(noise_noiserecordingfile, &fullpath);
     FILE* fp = fopen(fullpath, "a");
     fwrite(raw_audio, sizeof(uint8_t), n_sample, fp);
     fclose(fp);
@@ -51,7 +52,7 @@ int save_noise(uint8_t* raw_audio, size_t n_sample){
 //noise_supprlevel is DFT_BINS
 int compute_noise_profile(){
     char* fullpath = malloc(sizeof(char)*1024);
-    compute_file_path(noise_noiserecordingfile, fullpath);
+    compute_file_path(noise_noiserecordingfile, &fullpath);
 
     FILE* noise_file = fopen(fullpath, "rb");
     if (noise_file == NULL){
@@ -88,7 +89,7 @@ int compute_noise_profile(){
 int load_noise_profile(){
     
     char* fullpath = malloc(sizeof(char)*1024);
-    compute_file_path(noise_noiseprofilefile, fullpath);
+    compute_file_path(noise_noiseprofilefile, &fullpath);
 
     FILE* noise_file = fopen(fullpath, "rb");
     if (noise_file == NULL){
@@ -113,18 +114,25 @@ size_t pcm_uint8_t_read_and_dft(FILE* file, sdft_fdx_t* output){
 
     printf("Reading file\n");
 
-    while(_r = fread(&(input_data[input_length]), sizeof(uint8_t), 512, file)) input_length += _r;
+    while ((_r = fread(&input_data[input_length],
+                        sizeof(uint8_t),
+                        512,
+                        file)) > 0)
+    {
+        input_length += _r;
+    }
+
 
     float input_data_f[input_length];
 
-    for (int i=0; i < input_length; i++){
+    for (size_t i=0; i < input_length; i++){
         input_data_f[i] = input_data[i];
         input_data_f[i] = input_data_f[i] * 0.00784313725490196078f;    /* 0..255 to 0..2 */
         input_data_f[i] = input_data_f[i] - 1;
     }
 
     // float* x = input_data_f; // analysis samples of shape (n)
-    float* y = malloc(input_length*sizeof(float)); // synthesis samples of shape (n)
+    // float* y = malloc(input_length*sizeof(float)); // synthesis samples of shape (n)
 
     sdft_t* sdft = sdft_alloc(noise_suppr_level); // create sdft plan
 
@@ -140,7 +148,7 @@ size_t pcm_uint8_t_read_and_dft(FILE* file, sdft_fdx_t* output){
     return input_length;
 }
 
-void idft_and_float_conversion(sdft_fdx_t* data, size_t length, short* output){
+void idft_and_float_conversion(sdft_fdx_t* data, size_t length, uint8_t* output){
     sdft_t* sdft = sdft_alloc(noise_suppr_level); // create sdft plan
 
     float buffer[length];
@@ -164,6 +172,7 @@ void idft_and_float_conversion(sdft_fdx_t* data, size_t length, short* output){
 
 //rimuovi il rumore
 int remove_noise(uint8_t* input, size_t input_length, uint8_t* output){
+    //TODO error: we do not use input?
 
     switch(noise_status) {
         case UNLOADED:
@@ -190,7 +199,7 @@ int remove_noise(uint8_t* input, size_t input_length, uint8_t* output){
     
     for (int b=0; b < noise_suppr_level; b++){
 
-        for (int i=0; i < input_length; i++){
+        for (size_t i=0; i < input_length; i++){
             float phase = atan2(data[b*input_length + i].i, data[b*input_length + i].r);
             float magn = sqrt(data[b*input_length + i].r*data[b*input_length + i].r
                          + data[b*input_length + i].i*data[b*noise_length + i].i);
@@ -201,7 +210,7 @@ int remove_noise(uint8_t* input, size_t input_length, uint8_t* output){
         }
     }
     
-    short short_output[input_length];
+    // short short_output[input_length];
     idft_and_float_conversion(data, input_length, output);
 
     return 0;
