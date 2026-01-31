@@ -4,7 +4,6 @@
 */
 
 #include "at_commands.h"
-#include "clog.h"
 
 
 char* start_command = "RNSTART"; //record noise start

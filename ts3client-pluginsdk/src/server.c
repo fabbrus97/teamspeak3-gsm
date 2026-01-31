@@ -1,6 +1,5 @@
 #include "server.h"
 #include "ts3_functions.h"
-#include "clog.h"
 #define UDP_SIZE 512
 
 
@@ -80,10 +79,12 @@ int send_voice(short* samples, int sample_cnt){
     size_t odone;
     soxr_error_t error;
 
+    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
+
     error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
       samples, sample_cnt, NULL,                              /* Input. */
       downsampled, obuf_size, &odone,                             /* Output. */
-      &soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I), NULL, NULL);                             /* Default configuration.*/
+      &ioSpec, NULL, NULL);       /* Default configuration.*/
     
     if (error)
         ERROR("there was an error during downsampling");
@@ -103,8 +104,10 @@ int send_voice(short* samples, int sample_cnt){
         uint8_t tmp[available];
         memcpy(tmp, &(data[sent]), available); 
 
-        if (sendto(socket_desc, tmp, available, 0,
-                    (const struct sockaddr_in*)&test_client_addr, sizeof(test_client_addr)) < 0)
+        ssize_t errno;
+
+        if (!(errno = sendto(socket_desc, tmp, available, 0,
+                    (const struct sockaddr*)&test_client_addr, sizeof(test_client_addr))))
         {
             ERROR("Error in sendto(): %s", strerror(errno));
             return 1;
