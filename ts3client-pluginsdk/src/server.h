@@ -37,7 +37,6 @@ int connect_to_coap_server();
 int send_voice(short* samples, int sample_counter);
 int observe_voice(void* callback, unsigned char* data);
 int start_udp_socket();
-void receive_and_play_voice(void*  args);
 ssize_t receive_data(uint8_t** data);
 
 
