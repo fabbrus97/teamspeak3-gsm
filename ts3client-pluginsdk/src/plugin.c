@@ -46,6 +46,9 @@
 #define RETURNCODE_BUFSIZE 128
 
 #define PLUGIN_NAME "callbot"
+
+clog_level_t clog_min_level = CLOG_ERROR;
+
 const char* devID = "ts3callbotplayback";
 const char* devDisplayName = "ts3_callbot_playback";
 sem_t c_pb_sem;
@@ -148,7 +151,6 @@ int ts3plugin_init() {
 
     /* Your plugin init code here */
 	// clog_set_level(CLOG_ERROR);
-	clog_level_t clog_min_level = CLOG_TRACE;
 
 	const char* env_loglevel = getenv("LOGLEVEL");
 
@@ -249,7 +251,7 @@ void* main_loop_play(void* args){
 				start = -1;
 
 		} else {
-			usleep(30000); //30 ms
+			usleep(2000); //2 ms
 		}
 		
 
@@ -635,7 +637,7 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 		int at_output = at_process_command(at_message, &output);
 		DEBUG("output of at_command: %s", output);
 		if (output == NULL) //we did not handle the command
-			return ts3plugin_processCommand(serverConnectionHandlerID, message);
+			return -1; //ts3plugin_processCommand(serverConnectionHandlerID, message);
 		else {
 			DEBUG("I should reply: %s", output);
 
