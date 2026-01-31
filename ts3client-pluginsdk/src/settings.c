@@ -68,7 +68,7 @@ void load_settings(){
 
 	ini = iniparser_load(fullpath);
     if (ini==NULL) {
-        fprintf(stderr, "cannot parse file: %s\n", fullpath);
+        ERROR("cannot parse file: %s", fullpath);
         // ini=fopen(fullpath, "w");
 
 		// fprintf(ini,
@@ -79,11 +79,11 @@ void load_settings(){
 		// fclose(ini);
 		ini = iniparser_load(fullpath2);
 		if (ini == NULL){
-	        fprintf(stderr, "cannot parse file: %s\n", fullpath2);
+	        ERROR("cannot parse file: %s", fullpath2);
 			exit(1);
 		}
     } else {
-		printf("[DEBUG] %s read correctly\n", fullpath);
+		DEBUG("%s read correctly", fullpath);
 	}
 	iniparser_dump(ini, stderr); //dumps dictionary to stderr (prints the dict to a file pointer, in this case is stderr)
 	const char* ini_channel = iniparser_getstring(ini, "ts:channel", "default");
@@ -175,8 +175,8 @@ void load_settings(){
 	free(noiserecording_fullpath);
 	
 
-    printf("[DEBUG] ts ip to bind is ini/env/final: %s/%s/%s\n", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
-    printf("[DEBUG] ucontroller ip: %s cmd port: %i\n", ucontroller_address, ucontroller_cmd_port); //, ucontroller_cmd_port);
-	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    DEBUG("ts ip to bind is ini/env/final: %s/%s/%s", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
+    DEBUG("ucontroller ip: %s cmd port: %i", ucontroller_address, ucontroller_cmd_port); //, ucontroller_cmd_port);
+	INFO("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
 
 }
