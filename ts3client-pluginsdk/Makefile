@@ -26,7 +26,7 @@ server.o: ./src/server.c
 	gcc -Iinclude -I/usr/include/soxr src/server.c $(CFLAGS)
 # -I/usr/include/coap3 -lcoap-3-notls 
 
-settings.o: ./src/settings.c
+settings.o: ./src/settings.c src/utils/clog.h
 	gcc -Iinclude -I/usr/include/iniparser src/settings.c $(CFLAGS)
 
 at_commands.o: ./src/utils/at_commands.c
