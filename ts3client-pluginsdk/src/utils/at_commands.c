@@ -4,6 +4,7 @@
 */
 
 #include "at_commands.h"
+#include "clog.h"
 
 
 char* start_command = "RNSTART"; //record noise start
@@ -57,13 +58,10 @@ void utf8_to_ucs2_encoder(char* src, char** output){
     if (cd == (iconv_t)-1) {
 	/* Initialization failure. */
 	if (errno == EINVAL) {
-	    fprintf (stderr,
-		     "Conversion from '%s' to '%s' is not supported.\n",
-		     "UCS-2BE", "UTF-8");
+	    ERROR("Conversion from '%s' to '%s' is not supported.", "UCS-2BE", "UTF-8");
 	}
 	else {
-	    fprintf (stderr, "Initialization failure: %s\n",
-		     strerror (errno));
+	    ERROR("Initialization failure: %s", strerror (errno));
 	}
 	// exit ok
 	exit (1);
@@ -345,42 +343,35 @@ int at_send_command(const char* command, char** output){
     char recv_buf[TCP_BUFFER];
     int b_recv;
 
-    // int crash_str_size = 33;
-    // *output = malloc(crash_str_size+1);
-    // *output = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0"; //33
-    
     #if 1
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        perror("socket failed");
+        ERROR("socket failed: %s", strerror(errno));
         return 0;
     }
 
     if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("connect failed");
+        ERROR("connect failed: %s", strerror(errno));
         close(sockfd);
         return 0;
     }
 
     if (send(sockfd, command, strlen(command), 0) < 0) {
-        perror("send failed");
+        ERROR("send failed: %s", strerror(errno));
         close(sockfd);
         return 0;
     }
 
     b_recv = recv(sockfd, recv_buf, TCP_BUFFER - 1, 0);
     if (b_recv < 0) {
-        perror("recv failed");
+        ERROR("recv failed: %s", strerror(errno));
         close(sockfd);
         return 0;
     }
 
     close(sockfd);
 
-    // recv_buf[b_recv] = '\0';
-    // printf("[DEBUG] b_recv/strlen(buf): %i/%i\n", b_recv, strlen(recv_buf));
-    
     if (output != NULL){
         *output = malloc(b_recv+1);
 
@@ -388,8 +379,6 @@ int at_send_command(const char* command, char** output){
         memcpy(*output, recv_buf, b_recv);
         (*output)[b_recv] = '\0';
     }
-    // printf("[DEBUG] at command recv_buf: %s\n", recv_buf);
-    // printf("[DEBUG] copied recv_buf into output: %s\n", *output);
     
     return b_recv;
     #endif
@@ -427,14 +416,14 @@ int at_process_command(const char* command, char** output){
 	int i = 0;
 	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK, PHONEBOOK_MODE, OWN_NUMBER, RECORD_NOISE, HELP } cmd = CMD_NONE;
 
-	printf("AT: process command: '%s'\n", command);
+	DEBUG("AT: process command: '%s'", command);
 
 	strcpy(buf, command); // TODO fammi avere command senza "!test" (ts cmd keyword)
 
 	s = strtok(buf, " ");
 	
     while(s != NULL) {
-		printf("[DEBUG] checking s %s\n", s);
+		DEBUG("checking s %s", s);
 		if(i == 0) {
 			if(!strcmp(s, "phonebook")) {
 				cmd = CMD_PHONEBOOK;
@@ -478,35 +467,35 @@ int at_process_command(const char* command, char** output){
 			return 1;  /* Command not handled by at */
 		case CMD_PHONEBOOK:  /* /test join <channelID> [optionalCannelPassword] */
 			if(param1) {
-                printf("[DEBUG] checking params 1..4: %s, %s, %s, %s\n", param1, param2, param3, param4);
-                printf("[DEBUG] checking if it is a read: %i\n", strcmp(param1, "read"));
+                DEBUG("checking params 1..4: %s, %s, %s, %s", param1, param2, param3, param4);
+                DEBUG("checking if it is a read: %i", strcmp(param1, "read"));
 
                 if (param2 && param3 && param4){ //update a contact in position "param2"
                     if (strcmp(param1, "create") == 0 && allow_create_contacts){
-                        printf("[DEBUG] match for edit contact!\n");
+                        DEBUG("match for edit contact!");
                         at_send_command(cmd_str = phonebook_api.create_str(param2, param3, param4), output);
                         break;
                     }
                 }
 				else if (param2 && param3){
-                    printf("[DEBUG] got param2 & param3!\n");
+                    DEBUG("got param2 & param3!");
                     if (strcmp(param1, "create") == 0 && allow_create_contacts){
-                        printf("[DEBUG] match for create contact!\n");
+                        DEBUG("match for create contact!");
                         at_send_command(cmd_str = phonebook_api.create_str(NULL, param2, param3), output);
                         break;
                     } else if (strcmp(param1, "update") == 0 && allow_create_contacts){
-                        printf("[DEBUG] match for update contact!\n");
+                        DEBUG("match for update contact!");
                         at_send_command(cmd_str = phonebook_api.update(param2, param3), output);
                         break;
                     
                     } else if (strcmp(param1, "read") == 0){
-                        printf("[DEBUG] match for read contact!\n");
+                        DEBUG("match for read contact!");
                         at_send_command(cmd_str = phonebook_api.read(param2, param3), output);
                         break;
                     }
                 } else if (param2){
                     if (strcmp(param1, "delete") == 0 && allow_delete_contacts){
-                        printf("[DEBUG] match for delete contact!\n");
+                        DEBUG("match for delete contact!");
                         at_send_command(cmd_str = phonebook_api.del(param2), output);
                         break;
                     }
