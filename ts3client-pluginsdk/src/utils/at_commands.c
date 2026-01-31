@@ -54,7 +54,7 @@ void utf8_to_ucs2_encoder(char* src, char** output){
     size_t bufsize = strlen(src);
     size_t usc2_len = bufsize * 2; // Worst case
     iconv_t cd = iconv_open("UCS-2BE", "UTF-8");
-    if ((int) cd == -1) {
+    if (cd == (iconv_t)-1) {
 	/* Initialization failure. */
 	if (errno == EINVAL) {
 	    fprintf (stderr,
@@ -74,7 +74,8 @@ void utf8_to_ucs2_encoder(char* src, char** output){
     size_t _bufsize = bufsize;
     size_t _usc2_len = usc2_len;
     
-    size_t irr_converted = iconv(cd, &inptr, &_bufsize, &outptr, &_usc2_len);
+    // size_t irr_converted = iconv(cd, &inptr, &_bufsize, &outptr, &_usc2_len);
+    iconv(cd, &inptr, &_bufsize, &outptr, &_usc2_len);
     iconv_close(cd);
 
     // converting to hex string

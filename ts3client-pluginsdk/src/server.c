@@ -293,7 +293,7 @@ void receive_and_play_voice(void* args){
           //   printf("first byte is %i -> %i, second is %i -> %i, sum is %i\n", uint1, short1, uint2, short2, buffer[i/2]);
           // }
         }*/
-        for (int i = 0; i < recvBytes; i++){
+        for (size_t i = 0; i < recvBytes; i++){
           uint8_t uintVal = client_message[i];
 
 
