@@ -11,10 +11,10 @@
 #define NOISE_UNDEF 3
 #define RELOAD 4
 
-int compute_file_path(char* path, char* output_path);
+int compute_file_path(char* path, char** output_path);
 int delete_noiseprof_file();
 size_t pcm_uint8_t_read_and_dft(FILE* file, sdft_fdx_t* output);
-void idft_and_float_conversion(sdft_fdx_t* data, size_t length, short* output);
+void idft_and_float_conversion(sdft_fdx_t* data, size_t length, uint8_t* output);
 int save_noise(uint8_t* raw_audio, size_t n_sample);
 int compute_noise_profile();
 int load_noise_profile();

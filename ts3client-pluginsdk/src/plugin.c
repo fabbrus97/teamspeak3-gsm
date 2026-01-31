@@ -77,9 +77,9 @@ static int wcharToUtf8(const wchar_t* str, char** result) {
  */
 
 //this loop is responsible for receiving data via UDP, and playing it
-void* main_loop_play(void* arg);
+void* main_loop_play(void* args);
 //this loop is responsible for getting voice from ts server, and sending via UDP
-void* main_loop_acquire(void* arg);
+void* main_loop_acquire(void* args);
 
 
 /* Unique name identifying this plugin */
@@ -296,7 +296,6 @@ void* main_loop_acquire(void* args){
 	size_t receivedBytes;
 
 	// size_t playbackBufferSize = 960; // 1024;
-	size_t playbackBufferSize = 512*6;//360; // 1024; //TODO correlazione tra buffersize e usleep
 	// short playbackBuffer[playbackBufferSize];
 	// int i=0;
 	// int error = ERROR_sound_no_data;
@@ -304,7 +303,7 @@ void* main_loop_acquire(void* args){
 	// p.tv_sec=0;
 	// p.tv_nsec = 50000000L;
 	// int time2sleep = ((playbackBufferSize)*1000000/48000);
-	size_t bytes2write = 0;
+	size_t bytes2write;
 
 	char* _noisefilepathtmp = malloc(sizeof(char)*100);
 	char* noisefilepathtmp = malloc(sizeof(char)*100);
@@ -407,7 +406,7 @@ void* main_loop_acquire(void* args){
 
 		// printf("[SEM_P] Writing %i bytes in buffer\n", bytes2write);
 
-		for (int i = 0; i < bytes2write; i++){
+		for (size_t i = 0; i < bytes2write; i++){
 			// printf("byte %i ok: %i\n", i, mybuffer);
 			// printf("%i, ", mybuffer[i]);
 			// uint8_t uintval = mybuffer[i];
@@ -639,7 +638,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 		char** array;
 
 		if(ts3Functions.getPlaybackModeList(&array) == ERROR_ok) {
-			for(int i=0; array[i] != NULL; ++i) {
+			for(i=0; array[i] != NULL; ++i) {
 				printf("Mode: %s\n", array[i]);
 				ts3Functions.freeMemory(array[i]);  // Free C-string
 			}

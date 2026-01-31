@@ -19,7 +19,11 @@
 
 // Define a struct for generic CRUD operations
 typedef struct {
-    char* (*create)();
+    // char** (*create)();
+    union {
+        char* (*create_str)();
+        char** (*create_arr_str)();
+    };
     char* (*read)();
     char* (*update)();
     char* (*del)();
@@ -39,7 +43,7 @@ char* at_text_read(char* index, char* mode);
 char* at_text_delete(char* index, char* flag);
 
 //call apis
-char* at_call_make(char* name);
+char* at_call_make(const char* number);
 char* at_call_hang();
 char* at_call_wait();
 char* at_call_merge();
@@ -59,9 +63,7 @@ char** at_set_text_mode();
 char** at_check_network_status();
 
 //AT
-char* at_send_AT();
-
-int at_send_command(char* command, char** output);
+int at_send_command(const char* command, char** output);
 
 char* at_get_own_number();
 

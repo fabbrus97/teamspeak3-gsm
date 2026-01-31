@@ -175,7 +175,7 @@ char* at_text_delete(char* index, char* flag){
     return result;
 } 
 
-char* at_call_make(char* number){
+char* at_call_make(const char* number){
     char* buffer = malloc(40);  // allocate memory on the heap
     if (buffer != NULL) {
         snprintf(buffer, 40, "ATD%s;\n", number);
@@ -301,21 +301,15 @@ char** at_check_network_status(){
     return commands;
 }
 
-char* at_send_AT(){
-    char* buffer = malloc(4);  // allocate memory on the heap
-    strcpy(buffer, "AT\n");
-    return buffer;
-}
-
 static CrudAPI phonebook_api = {
-    .create = at_phonebook_create,
+    .create_str = at_phonebook_create,
     .read = at_phonebook_read,
     .update = NULL,
     .del = at_phonebook_delete
 };
 
 static CrudAPI text_api = {
-    .create = at_text_create,
+    .create_arr_str = at_text_create,
     .read = at_text_read,
     .update = NULL,
     .del = at_text_delete
@@ -346,7 +340,7 @@ void record_noise(){
 
 }
 
-int at_send_command(char* command, char** output){
+int at_send_command(const char* command, char** output){
     int sockfd;
     char recv_buf[TCP_BUFFER];
     int b_recv;
@@ -411,7 +405,7 @@ void at_init(char* server, int port){
     } else {
         server_addr.sin_addr.s_addr = inet_addr(ucontroller_address);
     }
-    if (port != NULL){
+    if (port){
         server_addr.sin_port = htons(port);
     } else {
         server_addr.sin_port = htons(ucontroller_cmd_port);
@@ -428,7 +422,8 @@ char* at_help(){
 
 int at_process_command(const char* command, char** output){
 	char buf[TCP_BUFFER];
-	char *s, *param1 = NULL, *param2 = NULL, *param3 = NULL, *param4 = NULL;
+	char *s;
+    const char *param1 = NULL, *param2 = NULL, *param3 = NULL, *param4 = NULL;
 	int i = 0;
 	enum { CMD_NONE = 0, CMD_PHONEBOOK, CMD_TEXT, CMD_CALL_MAKE, CMD_CALL_HANG, NETWORK, PHONEBOOK_MODE, OWN_NUMBER, RECORD_NOISE, HELP } cmd = CMD_NONE;
 
@@ -489,7 +484,7 @@ int at_process_command(const char* command, char** output){
                 if (param2 && param3 && param4){ //update a contact in position "param2"
                     if (strcmp(param1, "create") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for edit contact!\n");
-                        at_send_command(cmd_str = phonebook_api.create(param2, param3, param4), output);
+                        at_send_command(cmd_str = phonebook_api.create_str(param2, param3, param4), output);
                         break;
                     }
                 }
@@ -497,7 +492,7 @@ int at_process_command(const char* command, char** output){
                     printf("[DEBUG] got param2 & param3!\n");
                     if (strcmp(param1, "create") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for create contact!\n");
-                        at_send_command(cmd_str = phonebook_api.create(NULL, param2, param3), output);
+                        at_send_command(cmd_str = phonebook_api.create_str(NULL, param2, param3), output);
                         break;
                     } else if (strcmp(param1, "update") == 0 && allow_create_contacts){
                         printf("[DEBUG] match for update contact!\n");
@@ -538,7 +533,7 @@ int at_process_command(const char* command, char** output){
                             cmd_list++;
                         }
 
-                        _cmd_list = text_api.create(param2, param3);
+                        _cmd_list = text_api.create_arr_str(param2, param3);
                         cmd_list = _cmd_list;
                         while (*_cmd_list != NULL){
                             at_send_command(*_cmd_list, NULL); 
@@ -581,28 +576,29 @@ int at_process_command(const char* command, char** output){
                 }
             }
             return -1;
-        case NETWORK:
+        case NETWORK: {
             
-            char** _output = malloc(3*sizeof(char*));
-            char** output_start = _output;
-            char** _cmd_list = at_check_network_status();
-            cmd_list = _cmd_list;
-            while (*_cmd_list != NULL){
-                at_send_command(*_cmd_list, _output);
-                _cmd_list++;
-                _output++;
+                char** _output = malloc(3*sizeof(char*));
+                char** output_start = _output;
+                char** _cmd_list = at_check_network_status();
+                cmd_list = _cmd_list;
+                while (*_cmd_list != NULL){
+                    at_send_command(*_cmd_list, _output);
+                    _cmd_list++;
+                    _output++;
+                }
+                _output = output_start;
+                int total_copied = 0;
+                *output = malloc(250);
+                for (i=0; i < 3; i++){
+                    memcpy(*output + total_copied, *_output, strlen(*_output));
+                    int copied = strlen(*_output);
+                    (*output)[total_copied + copied] = '\n';
+                    total_copied += (copied+1);
+                    _output++;
+                }
+                (*output)[total_copied] = '\0';
             }
-            _output = output_start;
-            int total_copied = 0;
-            *output = malloc(250);
-            for (int i=0; i < 3; i++){
-                memcpy(*output + total_copied, *_output, strlen(*_output));
-                int copied = strlen(*_output);
-                (*output)[total_copied + copied] = '\n';
-                total_copied += (copied+1);
-                _output++;
-            }
-            (*output)[total_copied] = '\0';
             break;
         case CMD_CALL_MAKE:
             
@@ -652,7 +648,8 @@ int at_process_command(const char* command, char** output){
         cmd_list++;
     }
 
-    if(original_cmd_list != NULL)
-        free(original_cmd_list);  // Free the whole array of char*    
+    if(original_cmd_list != NULL){
+        free(original_cmd_list);   // Free the whole array of char*    
+    }
 	return 0;  /* AT handled command */
 }

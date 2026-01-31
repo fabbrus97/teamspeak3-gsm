@@ -9,7 +9,7 @@
 char* channel_to_connect;
 int ts_audio_port; 
 char* ucontroller_address;
-int ucontroller_cmd_port;
+int ucontroller_cmd_port = 0;
 char* ts_ip_bind;
 int ucontroller_audio_port;
 int noise_cancelnoise;
@@ -33,7 +33,7 @@ void load_settings(){
 
 	// ~/.local/share path
 	const char* share_path = "/.local/share/teamspeak-gsm/";
-	const char* fullpath2 = malloc(strlen(home) + strlen(share_path) + 1);
+	char* fullpath2 = malloc(strlen(home) + strlen(share_path) + 1);
 	strcpy(fullpath2, home);
     strcat(fullpath2, share_path);
 
@@ -48,21 +48,21 @@ void load_settings(){
 	strcat(noiserecording_fullpath, "noiserecording.pcm");
 
 	dictionary  *   ini ;
-	char* ini_channel;
-	char* ini_ucontroller_ip;
-	int   ini_ucontroller_at_port; //port where to send commands
-    char* ini_ts_ip_bind; //ip to bind the ts plugin to; defaults to 0.0.0.0
-    int   ini_ucontroller_audio_port; //this is the port where ucontroller will receive audio; defaults to 7000
-	int   ini_ts_audio_port; //this is the port where ts will receive audio; defaults to 8000
-	int   ini_noise_cancelnoise;
-	char* ini_noise_noiseprofilefile;
-	char* ini_noise_noiserecordingfile;
-	char* ini_noise_noisesupprlevel;
-	int ini_allow_send_sms;
-	int ini_allow_delete_sms;
-	int ini_allow_make_call;
-	int ini_allow_create_contacts;
-	int ini_allow_delete_contacts;
+	// const char* ini_channel;
+	// const char* ini_ucontroller_ip;
+	// const int   ini_ucontroller_at_port; //port where to send commands
+    // const char* ini_ts_ip_bind; //ip to bind the ts plugin to; defaults to 0.0.0.0
+    // const int   ini_ucontroller_audio_port; //this is the port where ucontroller will receive audio; defaults to 7000
+	// const int   ini_ts_audio_port; //this is the port where ts will receive audio; defaults to 8000
+	// const int   ini_noise_cancelnoise;
+	// const char* ini_noise_noiseprofilefile;
+	// const char* ini_noise_noiserecordingfile;
+	// const char* ini_noise_noisesupprlevel;
+	// const int ini_allow_send_sms;
+	// const int ini_allow_delete_sms;
+	// const int ini_allow_make_call;
+	// const int ini_allow_create_contacts;
+	// const int ini_allow_delete_contacts;
 
 	ini = iniparser_load(fullpath);
     if (ini==NULL) {
@@ -84,33 +84,33 @@ void load_settings(){
 		printf("[DEBUG] %s read correctly\n", fullpath);
 	}
 	iniparser_dump(ini, stderr); //dumps dictionary to stderr (prints the dict to a file pointer, in this case is stderr)
-	ini_channel = iniparser_getstring(ini, "ts:channel", "default");
-	ini_ucontroller_ip = iniparser_getstring(ini, "ucontroller:ip", "127.0.0.1");
-	ini_ucontroller_at_port = iniparser_getint(ini, "ucontroller:at_port", 8001);
-    ini_ts_ip_bind = iniparser_getstring(ini, "ts:ip", "0.0.0.0");
-    ini_ucontroller_audio_port = iniparser_getint(ini, "ucontroller:audio_port", 7000);
-    ini_ts_audio_port = iniparser_getint(ini, "ts:audio_port", 8000);
-	ini_noise_cancelnoise = iniparser_getint(ini, "noise:cancelnoise", 0);
-	ini_noise_noiseprofilefile = iniparser_getstring(ini, "noise:noiseprofilefile", noiseprofile_fullpath);
-	ini_noise_noiserecordingfile = iniparser_getstring(ini, "noise:noiserecordingfile", noiserecording_fullpath);
-	ini_noise_noisesupprlevel = iniparser_getstring(ini, "noise:noisesupprlevel", 6);
-	ini_allow_send_sms = iniparser_getint(ini, "permissions:allow_send_sms", 0);
-	ini_allow_delete_sms = iniparser_getint(ini, "permissions:allow_delete_sms", 0);
-	ini_allow_make_call = iniparser_getint(ini, "permissions:allow_make_call", 0);
-	ini_allow_create_contacts = iniparser_getint(ini, "permissions:allow_create_contacts", 0);
-	ini_allow_delete_contacts = iniparser_getint(ini, "permissions:allow_delete_contacts", 0);
+	const char* ini_channel = iniparser_getstring(ini, "ts:channel", "default");
+	const char* ini_ucontroller_ip = iniparser_getstring(ini, "ucontroller:ip", "127.0.0.1");
+	const int   ini_ucontroller_at_port = iniparser_getint(ini, "ucontroller:at_port", 8001);
+    const char* ini_ts_ip_bind = iniparser_getstring(ini, "ts:ip", "0.0.0.0");
+    const int   ini_ucontroller_audio_port = iniparser_getint(ini, "ucontroller:audio_port", 7000);
+    const int   ini_ts_audio_port = iniparser_getint(ini, "ts:audio_port", 8000);
+	const int   ini_noise_cancelnoise = iniparser_getint(ini, "noise:cancelnoise", 0);
+	const char* ini_noise_noiseprofilefile = iniparser_getstring(ini, "noise:noiseprofilefile", noiseprofile_fullpath);
+	const char* ini_noise_noiserecordingfile = iniparser_getstring(ini, "noise:noiserecordingfile", noiserecording_fullpath);
+	const int ini_noise_noisesupprlevel = iniparser_getint(ini, "noise:noisesupprlevel", 6);
+	const int ini_allow_send_sms = iniparser_getint(ini, "permissions:allow_send_sms", 0);
+	const int ini_allow_delete_sms = iniparser_getint(ini, "permissions:allow_delete_sms", 0);
+	const int ini_allow_make_call = iniparser_getint(ini, "permissions:allow_make_call", 0);
+	const int ini_allow_create_contacts = iniparser_getint(ini, "permissions:allow_create_contacts", 0);
+	const int ini_allow_delete_contacts = iniparser_getint(ini, "permissions:allow_delete_contacts", 0);
 
 	//then check env variables
 	const char* env_channel = getenv("TSGSM_TSCHANNEL"); // Get the value of $HOME
 	const char* env_ucontroller_ip = getenv("TSGSM_UC_IP"); // Get the value of $HOME
-	const int env_ucontroller_at_port = getenv("TSGSM_UC_ATPORT"); 
+	const char* env_ucontroller_at_port = getenv("TSGSM_UC_ATPORT"); //convert to int
     const char* env_ts_ip_bind = getenv("TSGSM_TS_BIND");
-    const int env_ucontroller_audio_port = getenv("TSGSM_UC_AUDIOPORT");
-    const int env_ts_audio_port = getenv("TSGSM_TS_AUDIOPORT");
-	const int env_noise_cancelnoise = getenv("TSGSM_NOISE_CANCELNOISE");
+    const char* env_ucontroller_audio_port = getenv("TSGSM_UC_AUDIOPORT");//convert to int
+    const char* env_ts_audio_port = getenv("TSGSM_TS_AUDIOPORT");//convert to int
+	const char* env_noise_cancelnoise = getenv("TSGSM_NOISE_CANCELNOISE");//convert to int
 	const char* env_noise_noiseprofilefile = getenv("TSGSM_NOISE_PROFILEPATH");
 	const char* env_noise_noiserecordingfile = getenv("TSGSM_NOISE_RECORDINGPATH");
-	const int* env_noise_noisesupprlevel = getenv("TSGSM_NOISE_SUPPRLEVEL");
+	const char* env_noise_noisesupprlevel = getenv("TSGSM_NOISE_SUPPRLEVEL");//convert to int
 	const char* env_allow_send_sms = getenv("TSGSM_ALLOW_SEND_SMS");
 	const char* env_allow_delete_sms = getenv("TSGSM_ALLOW_DELETE_SMS");
 	const char* env_allow_make_call = getenv("TSGSM_ALLOW_MAKE_CALL");
@@ -143,7 +143,7 @@ void load_settings(){
 	} else {
 		strcpy(noise_noiserecordingfile, ini_noise_noiserecordingfile);
 	}
-	noise_suppr_level = env_noise_noisesupprlevel != NULL ? env_noise_noisesupprlevel : ini_noise_noisesupprlevel;
+	noise_suppr_level = env_noise_noisesupprlevel == NULL ? ini_noise_noisesupprlevel : atoi(env_noise_noisesupprlevel);
 
 	allow_send_sms = env_allow_send_sms != NULL ? atoi(env_allow_send_sms) : ini_allow_send_sms;
 	allow_delete_sms = env_allow_delete_sms != NULL ? atoi(env_allow_delete_sms) : ini_allow_delete_sms;
@@ -152,6 +152,11 @@ void load_settings(){
 	allow_delete_contacts = env_allow_delete_contacts != NULL ? atoi(env_allow_delete_contacts) : ini_allow_delete_contacts;
 
 	iniparser_freedict(ini);
+	free(fullpath);
+	free(fullpath2);
+	free(noiseprofile_fullpath);
+	free(noiserecording_fullpath);
+	
 
     printf("[DEBUG] ts ip to bind is ini/env/final: %s/%s/%s\n", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
     printf("[DEBUG] ucontroller ip: %s cmd port: %i\n", ucontroller_address, ucontroller_cmd_port); //, ucontroller_cmd_port);

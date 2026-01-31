@@ -62,16 +62,6 @@ void convert_short_to_uint8(short * samples, int count, uint8_t* out){
  }
 }
 
-
-// Function to apply gain reduction to audio samples
-void apply_gain(short* samples, size_t num_samples, double gain) {
-    for (size_t i = 0; i < num_samples; ++i) {
-        // Apply gain to each sample
-        samples[i] = (short)(samples[i] * gain);
-    }
-}
-
-
 int send_voice(short* samples, int sample_cnt){
 
     // IP address and port
@@ -177,7 +167,6 @@ int send_voice(short* samples, int sample_cnt){
     // printf("done, sending...\n");
 
     size_t sent = 0;
-    int mycounter = 1;
     while (sent < odone){ //(*odone)*2){
         
         
@@ -192,11 +181,6 @@ int send_voice(short* samples, int sample_cnt){
         // }
         // printf("\n");
 
-
-        // printf("send %i first 10 bytesa are: ", mycounter);
-        // for (int i = 0; i<10; i++) printf("%i ", tmp[i]);
-        // printf("\n");
-        mycounter += 1;
 
         // if (sendto(socket_desc, data, (*odone), 0,
         if (sendto(socket_desc, tmp, available, 0,
@@ -268,56 +252,4 @@ ssize_t receive_data(uint8_t** data){
     return recvBytes;
 }
 
-void receive_and_play_voice(void* args){
-    // Receive client's message:
-    struct timespec myts;
-    myts.tv_sec=0;
-    myts.tv_nsec = 1000; //10 millisec
-    size_t recvBytes = 0;
-    for(;;){
-        recvBytes = recvfrom(socket_desc, client_message, sizeof(client_message), 0,
-            (struct sockaddr*)&client_addr, &client_struct_length);
-
-        printf("Received message from IP: %s and port: %i\n",
-              inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        printf("message length is %li\n", recvBytes);
-        short buffer[recvBytes];
-
-        /*for (int i=0; i < recvBytes-1; i+=2){
-          uint8_t uint1 = client_message[i+1];
-          uint8_t uint2 = client_message[i];
-          short short1 = (((short)uint1) << 8);
-          short short2 = ((short)uint2);
-          buffer[i/2] = short1 + short2;
-          // if (i<10){
-          //   printf("first byte is %i -> %i, second is %i -> %i, sum is %i\n", uint1, short1, uint2, short2, buffer[i/2]);
-          // }
-        }*/
-        for (size_t i = 0; i < recvBytes; i++){
-          uint8_t uintVal = client_message[i];
-
-
-          short shortVal = (short) (uintVal - 0x80) << 8; //uintVal < 127 ? (1 - uintVal/(127))*(-32768) : ((uintVal - 127)/127)*(32768);
-          buffer[i] = shortVal;
-        }
-
-        (*((const struct TS3Functions *)args)).processCustomCaptureData("ts3callbotplayback", buffer, recvBytes);
-
-        nanosleep(&myts, &myts);
-
-        memset(client_message, 0, sizeof(client_message));
-    }
-    // Respond to client:
-    // strcpy(server_message, client_message);
-
-    // if (sendto(socket_desc, server_message, strlen(server_message), 0,
-    //      (struct sockaddr*)&client_addr, client_struct_length) < 0){
-    //     printf("Can't send\n");
-    //     return -1;
-    // }
-
-    // Close the socket:
-    // close(socket_desc);
-
-}
 
