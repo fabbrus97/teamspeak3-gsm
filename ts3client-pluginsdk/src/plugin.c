@@ -53,10 +53,8 @@ int recording_noise = 0;
 int recorded_noise_samples = 0;
 sem_t noise_sem;
 
-static uint8_t* noised_audio_buffer = NULL;
 static uint8_t* denoised_audio_buffer = NULL;
 static char* pluginID = NULL;
-static uint64 currentServerConnectionHandlerID;
 
 static struct TS3Functions ts3Functions;
 
@@ -151,7 +149,7 @@ int ts3plugin_init() {
     printf("PLUGIN: init\n");
 
 	//load variables
-	load_variables();
+	load_settings();
 
 	// 1. create audio playback device
 	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){
@@ -206,7 +204,7 @@ void* main_loop_play(void* args){
 		if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
 		// if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
 			perror("clock_gettime");
-			return;
+			return NULL;
 		}
 
 		long now = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
@@ -299,14 +297,14 @@ void* main_loop_acquire(void* args){
 
 	// size_t playbackBufferSize = 960; // 1024;
 	size_t playbackBufferSize = 512*6;//360; // 1024; //TODO correlazione tra buffersize e usleep
-	short playbackBuffer[playbackBufferSize];
-	int i=0;
+	// short playbackBuffer[playbackBufferSize];
+	// int i=0;
 	// int error = ERROR_sound_no_data;
-	struct timespec p;
-	p.tv_sec=0;
-	p.tv_nsec = 50000000L;
-	int time2sleep = ((playbackBufferSize)*1000000/48000);
-	int bytes2write = 0;
+	// struct timespec p;
+	// p.tv_sec=0;
+	// p.tv_nsec = 50000000L;
+	// int time2sleep = ((playbackBufferSize)*1000000/48000);
+	size_t bytes2write = 0;
 
 	char* _noisefilepathtmp = malloc(sizeof(char)*100);
 	char* noisefilepathtmp = malloc(sizeof(char)*100);
@@ -622,7 +620,7 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 			char*** array;
 
 			if(ts3Functions.getPlaybackDeviceList(defaultMode, &array) == ERROR_ok) {
-				for(int i=0; array[i] != NULL; ++i) {
+				for(i=0; array[i] != NULL; ++i) {
 					printf("Playback device name: %s\n", array[i][0]);  /* First element: Device name */
 					printf("Playback device ID: %s\n",   array[i][1]);  /* Second element: Device ID */
 
@@ -725,20 +723,8 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 		}
 
 	} else {
-		printf("[DEBUG] message/keyword/kw/cmp: %s/%s/%i\n", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
+		printf("[DEBUG] message/keyword/kw/cmp: %s/%s/%li/%i\n", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
 	}
 
     return 1;  /* 0 = handle normally, 1 = client will ignore the text message */
-}
-
-void ts3plugin_onTalkStatusChangeEvent(uint64 serverConnectionHandlerID, int status, int isReceivedWhisper, anyID clientID) {
-	/* Demonstrate usage of getClientDisplayName */
-	char name[512];
-	if(ts3Functions.getClientDisplayName(serverConnectionHandlerID, clientID, name, 512) == ERROR_ok) {
-		if(status == STATUS_TALKING) {
-			printf("--> %s starts talking\n", name);
-		} else {
-			printf("--> %s stops talking\n", name);
-		}
-	}
 }
