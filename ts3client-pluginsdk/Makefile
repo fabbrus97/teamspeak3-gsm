@@ -19,17 +19,17 @@ test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o
 # -liconv -lm -lkissfft-float
 #-lcoap-3-notls 
 
-plugin.o: ./src/plugin.c
+plugin.o: ./src/plugin.c src/utils/clog.h
 	gcc -Iinclude src/plugin.c $(CFLAGS)
 
-server.o: ./src/server.c
+server.o: ./src/server.c src/utils/clog.h
 	gcc -Iinclude -I/usr/include/soxr src/server.c $(CFLAGS)
 # -I/usr/include/coap3 -lcoap-3-notls 
 
 settings.o: ./src/settings.c src/utils/clog.h
 	gcc -Iinclude -I/usr/include/iniparser src/settings.c $(CFLAGS)
 
-at_commands.o: ./src/utils/at_commands.c
+at_commands.o: ./src/utils/at_commands.c src/utils/clog.h
 # 	gcc -Isrc/utils src/utils/at_commands.c -liconv $(CFLAGS)
 	gcc -Isrc src/utils src/utils/at_commands.c $(CFLAGS)
 
