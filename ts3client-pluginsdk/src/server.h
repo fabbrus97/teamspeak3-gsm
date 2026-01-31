@@ -22,6 +22,7 @@
 // #include <struct_timespec.h>
 
 #include "settings.h"
+#include "utils/clog.h"
 
 
 #define ISIZE 48000

@@ -10,6 +10,7 @@
 #define SETTINGS_H
 
 #include <iniparser/iniparser.h>
+#include "utils/clog.h"
 
 extern char* channel_to_connect;
 extern int ts_audio_port; //this is the port where ts will receive audio; defaults to 8000

@@ -136,7 +136,7 @@ typedef enum {
 /* Global state */
 static clog_mutex_t clog_mutex;
 static atomic_bool clog_is_initialized = false;
-static clog_level_t clog_min_level = CLOG_TRACE;
+extern clog_level_t clog_min_level; // = CLOG_TRACE;
 static clog_color_mode_t clog_color_mode = CLOG_COLOR_AUTO;
 static FILE *clog_output = NULL; /* NULL means stdout */
 static bool clog_show_timestamp = true;
