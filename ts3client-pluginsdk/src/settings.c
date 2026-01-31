@@ -5,6 +5,8 @@
 */
 
 #include "settings.h"
+#include "utils/clog.h"
+#include <string.h>
 
 char* channel_to_connect;
 int ts_audio_port; 
@@ -150,6 +152,21 @@ void load_settings(){
 	allow_make_call = env_allow_make_call != NULL ? atoi(env_allow_make_call) : ini_allow_make_call;
 	allow_create_contacts = env_allow_create_contacts != NULL ? atoi(env_allow_create_contacts) : ini_allow_create_contacts;
 	allow_delete_contacts = env_allow_delete_contacts != NULL ? atoi(env_allow_delete_contacts) : ini_allow_delete_contacts;
+
+	const char* env_loglevel = getenv("LOGLEVEL");
+	if (env_loglevel != NULL) {
+		if (strcasecmp(env_loglevel, "INFO") == 0) {
+			clog_set_level(CLOG_INFO);
+		} else if (strcasecmp(env_loglevel, "DEBUG") == 0) {
+			clog_set_level(CLOG_DEBUG);
+		} else if (strcasecmp(env_loglevel, "ERROR") == 0) {
+			clog_set_level(CLOG_ERROR);
+		} else {
+			clog_set_level(CLOG_ERROR);
+		}
+	} else {
+		clog_set_level(CLOG_ERROR);
+	}
 
 	iniparser_freedict(ini);
 	free(fullpath);

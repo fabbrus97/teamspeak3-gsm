@@ -19,11 +19,12 @@
 #include <string.h>
 #include <assert.h>
 #include "teamspeak/public_errors.h"
-#include "teamspeak/public_errors_rare.h"
+#include "teamspeak/public_errors_rare.hh"
 #include "teamspeak/public_definitions.h"
 #include "teamspeak/public_rare_definitions.h"
 #include "teamspeak/clientlib_publicdefinitions.h"
 #include "plugin.h"
+#include "utils/clog.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <unistd.h>
@@ -146,14 +147,14 @@ int ts3plugin_init() {
 	char pluginPath[PATH_BUFSIZE];
 
     /* Your plugin init code here */
-    printf("PLUGIN: init\n");
+    INFO("PLUGIN: init");
 
 	//load variables
 	load_settings();
 
 	// 1. create audio playback device
 	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){
-		printf("Error registering playback device\n");
+		ERROR("Error registering playback device");
 		exit(1);
 	}
 
@@ -164,7 +165,7 @@ int ts3plugin_init() {
     ts3Functions.getConfigPath(configPath, PATH_BUFSIZE);
 	ts3Functions.getPluginPath(pluginPath, PATH_BUFSIZE, pluginID);
 
-	printf("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s\n", appPath, resourcesPath, configPath, pluginPath);
+	INFO("PLUGIN: App path: %s\nResources path: %s\nConfig path: %s\nPlugin path: %s", appPath, resourcesPath, configPath, pluginPath);
 
     return 0;  /* 0 = success, 1 = failure, -2 = failure but client will not show a "failed to load" warning */
 	/* -2 is a very special case and should only be used if a plugin displays a dialog (e.g. overlay) asking the user to disable
@@ -176,10 +177,10 @@ int ts3plugin_init() {
 void* main_loop_play(void* args){
 	// start udp socket
 	if (start_udp_socket() != 0){
-		printf("Error starting udp socket");
+		ERROR("Error starting udp socket");
 		exit(1);
 	}
-	printf(" ========== DEBUG THREAD STARTED ========== \n");
+	DEBUG(" ========== DEBUG THREAD STARTED ========== ");
 	// uint8_t* mybuffer = NULL;
 	const int bytes2play = 256;
 
@@ -194,16 +195,14 @@ void* main_loop_play(void* args){
 		 * see https://teamspeakdocs.github.io/PluginAPI/client_html/ar01s13s05.html
 
 		 */
-		// printf("**** acquire custom playback ***\n");
 		size_t playbackBufferSize = 512*6; //I know this will be reduced to 512 due to downsample
 		// I know it will take 512 * 1/8000 = 0.064 seconds to reproduce
 		// so when I send more than 1 sec of playback in less than 1 sec of time, I pause sending voice
 		short playbackBuffer[playbackBufferSize];
-		// printf("[DEBUG] ACQUIRING VOICE\n");
 
 		if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
 		// if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-			perror("clock_gettime");
+			ERROR("clock_gettime: %s", strerror(errno));
 			return NULL;
 		}
 
@@ -214,39 +213,17 @@ void* main_loop_play(void* args){
 
 		// I always send 512 samples that, at 8khz, take 0.064 seconds to play
 		// and I need to be a little bit faster than that
-		// if (now - start == 0 || now - start > 64){
 		if (now - start > 64){
-			// printf("[DEBUG] now/start/diff %li/%li/%li\n", now, start, now - start);
 			int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
 
-			// int error = 0;
-			// printf("error is %i\n", error);
 			if(error == ERROR_ok) {
-
-				// printf("Some audio playback available\n");
-
-				// if (playbackBuffer != NULL){
-					// printf("checking playbackbuffer: %p\n", playbackBuffer);
-					// for (int i=0; i < 10; i++){
-					// 	// printf("checking byte %i\n", i);
-					// 	flag += playbackBuffer[i];
-					// }
-
-					// printf("\n");
-					// Playback data available, send playbackBuffer to your custom device
-
-						// printf("[DEBUG] i should send voice\n");
-						send_voice(playbackBuffer, playbackBufferSize); 
-					// else
-						// printf("but that was a lie!\n");
-				// }
+				send_voice(playbackBuffer, playbackBufferSize); 
 
 			} else if(error == ERROR_sound_no_data) {
 				// Not an error. The client lib has no playback data available. Depending on your custom sound API, either
 				// pause playback for performance optimisation or send a buffer of zeros.
-				// printf("No audio playback right now\n");
 			} else {
-				// printf("Failed to get playback data\n");  // Error occured *
+				ERROR("Failed to get playback data");  // Error occured *
 			}
 
 			if (start != now)
@@ -277,7 +254,6 @@ void* main_loop_play(void* args){
             sem_post(&c_pb_sem);
 
             // Send to TeamSpeak
-            // ts3Functions.processCustomCaptureData(serverConnectionHandlerID, chunk, bytes2play);
 			ts3Functions.processCustomCaptureData("ts3callbotplayback", chunk, bytes2play);
 
 		} else {
@@ -294,15 +270,6 @@ void* main_loop_acquire(void* args){
 
 	uint8_t* mybuffer = NULL;
 	size_t receivedBytes;
-
-	// size_t playbackBufferSize = 960; // 1024;
-	// short playbackBuffer[playbackBufferSize];
-	// int i=0;
-	// int error = ERROR_sound_no_data;
-	// struct timespec p;
-	// p.tv_sec=0;
-	// p.tv_nsec = 50000000L;
-	// int time2sleep = ((playbackBufferSize)*1000000/48000);
 	size_t bytes2write;
 
 	char* _noisefilepathtmp = malloc(sizeof(char)*100);
@@ -324,19 +291,10 @@ void* main_loop_acquire(void* args){
 	int wasIrecordingBefore = 0;
 
 	for(;;){
-		// printf("DEBUG another loop bites the dust %i\n", i);
-		// usleep(20*1000); // sleep 30 ms
-		// usleep(time2sleep); // sleep playbackBufferSize/frequency * 1000000 seconds (frequency is 48000, 1000000 is one second in nanoseconds used by usleep)
-		// pthread_t         self;
-		// self = pthread_self();
-		// printf("my thread id is %i\n", self);
-
 		sem_wait(&noise_sem);
-		//printf("[DEBUG] recording_noise: %i\n", recording_noise);
 		if (!recording_noise && wasIrecordingBefore){
 			
 			rename(noisefilepathtmp, noisefinalpath);
-			// remove(noisefilepathtmp);
 			wasIrecordingBefore = 0;
 		}
 		sem_post(&noise_sem);
@@ -344,13 +302,10 @@ void* main_loop_acquire(void* args){
 
 		receivedBytes = receive_data(&mybuffer);
 
-		// printf("[DEBUG] i'm gonna fucking wait on noise_sem\n");
 		sem_wait(&noise_sem);
-		// printf("[DEBUG] finally the wait is over\n");
 
 		#if 0
 		if(noise_cancelnoise && !recording_noise){
-			// printf("[DEBUG] I'm in the if 1!\n");
 
 			// noised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes);
 			denoised_audio_buffer = malloc(sizeof(uint8_t*)*receivedBytes); //TODO non mi ricordo se la proporzione e' 1 a 1
@@ -359,10 +314,8 @@ void* main_loop_acquire(void* args){
 
 		} else if (recording_noise){
 
-			// printf("[DEBUG] recorded_noise_samples: %i/%i\n", recorded_noise_samples, 30*8000);
 			FILE* noisetmp = fopen(noisefilepathtmp, "a");
 			
-			// printf("[DEBUG] noisefilepathtmp is %s\n", noisefilepathtmp);
 			assert(noisetmp != NULL);
 
 			fwrite(mybuffer, sizeof(uint8_t), receivedBytes, noisetmp);
@@ -372,45 +325,27 @@ void* main_loop_acquire(void* args){
 
 		}
 		#endif
-		// printf("[DEBUG] I'm gonna release noise_sem\n");
 
 		sem_post(&noise_sem);
-
-		// printf("[DEBUG] noise_sem is free\n");
 
 
 
 		while (1){
 			sem_wait(&c_pb_sem);
 			if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
-				// printf("[DEBUG] I'm ready to write to buffer!\n");
 				sem_post(&c_pb_sem);
 				break;
 			}
 			sem_post(&c_pb_sem);
-			// printf("[DEBUG] cannot write to buffer because not ready\n");
-			// printf("[DEBUG][SKIP WRITE] audio_buffer_played: %i, audio_buffer_pos: %i \n", audio_buffer_played, audio_buffer_pos);
 
-			// usleep(200);
 		}
 
 
 		bytes2write = audio_buffer_size - audio_buffer_pos;
 		bytes2write = bytes2write > receivedBytes ? receivedBytes : bytes2write;
 
-		// printf("[W_INFO] writing audio to %i - %i\n", audio_buffer_pos, audio_buffer_pos+bytes2write);
-
-		// while ((audio_buffer_pos < audio_buffer_played && ((audio_buffer_pos + bytes2write) >= audio_buffer_played)) ){
-		// 	usleep(100);
-		// }
-
-		// printf("[SEM_P] Writing %i bytes in buffer\n", bytes2write);
 
 		for (size_t i = 0; i < bytes2write; i++){
-			// printf("byte %i ok: %i\n", i, mybuffer);
-			// printf("%i, ", mybuffer[i]);
-			// uint8_t uintval = mybuffer[i];
-			// short shortVal = uintval < 127 ? (1 - uintval/(127))*(-32768) : ((uintval - 127)/127)*(32768);
 			
 			sem_wait(&noise_sem);
 			if (!noise_cancelnoise || recording_noise)
@@ -420,26 +355,11 @@ void* main_loop_acquire(void* args){
 			sem_post(&noise_sem);
 			
 
-			// audio_buffer[i] = shortVal;
-			// printf("%i => %i, ", mybuffer[i], audio_buffer[i]);
-
-
 		}
 		sem_wait(&c_pb_sem);
 		audio_buffer_pos = (audio_buffer_pos + bytes2write) % audio_buffer_size;
 		sem_post(&c_pb_sem);
-			// printf("[SEM_V] Data written\n");
-
-
-		// free(&mybuffer); //TODO memory leak!
-
-
-		/* Get playback data from the client lib */
-		// int error = (*((const struct TS3Functions *)args)).acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
-
-
-		// printf("loop ended ok\n");
-
+			// free(&mybuffer); //TODO memory leak!
 	}
 
 
@@ -448,7 +368,7 @@ void* main_loop_acquire(void* args){
 /* Custom code called right before the plugin is unloaded */
 void ts3plugin_shutdown() {
     /* Your plugin cleanup code here */
-    printf("PLUGIN: shutdown\n");
+    INFO("PLUGIN: shutdown");
 
 	//TODO clean in server.c
 	/*
@@ -514,7 +434,7 @@ int ts3plugin_requestAutoload() {
 void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int newStatus, unsigned int errorNumber) {
     /* Some example code following to show how to use the information query functions. */
 
-	printf("[DEBUG] IMPORTANT!!! THE IP OF UCONTR IS %s\n", ts_ip_bind);
+	DEBUG("IMPORTANT!!! THE IP OF UCONTR IS %s", ts_ip_bind);
 
     if(newStatus == STATUS_CONNECTION_ESTABLISHED) {  /* connection established and we have client and channels available */
 
@@ -528,91 +448,91 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 
         /* Print clientlib version */
         if(ts3Functions.getClientLibVersion(&s) == ERROR_ok) {
-            printf("PLUGIN: Client lib version: %s\n", s);
+            INFO("PLUGIN: Client lib version: %s", s);
             ts3Functions.freeMemory(s);  /* Release string */
         } else {
-            ts3Functions.logMessage("Error querying client lib version", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error querying client lib version");
             return;
         }
 
 		/* Write plugin name and version to log */
         snprintf(msg, sizeof(msg), "Plugin %s, Version %s, Author: %s", ts3plugin_name(), ts3plugin_version(), ts3plugin_author());
-        ts3Functions.logMessage(msg, LogLevel_INFO, "Plugin", serverConnectionHandlerID);
+        INFO(msg);
 
         /* Print virtual server name */
         if((error = ts3Functions.getServerVariableAsString(serverConnectionHandlerID, VIRTUALSERVER_NAME, &s)) != ERROR_ok) {
 			if(error != ERROR_not_connected) {  /* Don't spam error in this case (failed to connect) */
-				ts3Functions.logMessage("Error querying server name", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+				ERROR("Error querying server name");
 			}
             return;
         }
-        printf("PLUGIN: Server name: %s\n", s);
+        INFO("PLUGIN: Server name: %s", s);
         ts3Functions.freeMemory(s);
 
         /* Print virtual server welcome message */
         if(ts3Functions.getServerVariableAsString(serverConnectionHandlerID, VIRTUALSERVER_WELCOMEMESSAGE, &s) != ERROR_ok) {
-            ts3Functions.logMessage("Error querying server welcome message", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error querying server welcome message");
             return;
         }
-        printf("PLUGIN: Server welcome message: %s\n", s);
+        INFO("PLUGIN: Server welcome message: %s", s);
         ts3Functions.freeMemory(s);  /* Release string */
 
         /* Print own client ID and nickname on this server */
         if(ts3Functions.getClientID(serverConnectionHandlerID, &myID) != ERROR_ok) {
-            ts3Functions.logMessage("Error querying client ID", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error querying client ID");
             return;
         }
         if(ts3Functions.getClientSelfVariableAsString(serverConnectionHandlerID, CLIENT_NICKNAME, &s) != ERROR_ok) {
-            ts3Functions.logMessage("Error querying client nickname", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error querying client nickname");
             return;
         }
-        printf("PLUGIN: My client ID = %d, nickname = %s\n", myID, s);
+        INFO("PLUGIN: My client ID = %d, nickname = %s", myID, s);
         ts3Functions.freeMemory(s);
 
         /* Print list of all channels on this server */
         if(ts3Functions.getChannelList(serverConnectionHandlerID, &ids) != ERROR_ok) {
-            ts3Functions.logMessage("Error getting channel list", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error getting channel list");
             return;
         }
-        printf("PLUGIN: Available channels:\n");
+        INFO("PLUGIN: Available channels:");
         for(i=0; ids[i]; i++) {
             /* Query channel name */
             if(ts3Functions.getChannelVariableAsString(serverConnectionHandlerID, ids[i], CHANNEL_NAME, &s) != ERROR_ok) {
-                ts3Functions.logMessage("Error querying channel name", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+                ERROR("Error querying channel name");
                 return;
             }
-            printf("PLUGIN: Channel ID = %llu, name = %s\n", (long long unsigned int)ids[i], s);
+            INFO("PLUGIN: Channel ID = %llu, name = %s", (long long unsigned int)ids[i], s);
             ts3Functions.freeMemory(s);
         }
         ts3Functions.freeMemory(ids);  /* Release array */
 
         /* Print list of existing server connection handlers */
-        printf("PLUGIN: Existing server connection handlers:\n");
+        INFO("PLUGIN: Existing server connection handlers:");
         if(ts3Functions.getServerConnectionHandlerList(&ids) != ERROR_ok) {
-            ts3Functions.logMessage("Error getting server list", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+            ERROR("Error getting server list");
             return;
         }
         for(i=0; ids[i]; i++) {
             if((error = ts3Functions.getServerVariableAsString(ids[i], VIRTUALSERVER_NAME, &s)) != ERROR_ok) {
 				if(error != ERROR_not_connected) {  /* Don't spam error in this case (failed to connect) */
-					ts3Functions.logMessage("Error querying server name", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+					ERROR("Error querying server name");
 				}
                 continue;
             }
-            printf("- %llu - %s\n", (long long unsigned int)ids[i], s);
+            DEBUG("- %llu - %s", (long long unsigned int)ids[i], s);
             ts3Functions.freeMemory(s);
         }
         ts3Functions.freeMemory(ids);
 
 		// // /* Open capture device we created earlier */
 		if(ts3Functions.openCaptureDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok) {
-			printf("Error opening capture device\n");
+			ERROR("Error opening capture device");
 			exit(1);
 		}
 
 		// //open the device for playback
-		printf("======================= DEBUG =======================\n");
-		printf("======================= ===== =======================\n");
+		DEBUG("======================= DEBUG =======================");
+		DEBUG("======================= ===== =======================");
 		char* defaultMode;
 
 		if(ts3Functions.getDefaultPlayBackMode(&defaultMode) == ERROR_ok) {
@@ -620,8 +540,8 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 
 			if(ts3Functions.getPlaybackDeviceList(defaultMode, &array) == ERROR_ok) {
 				for(i=0; array[i] != NULL; ++i) {
-					printf("Playback device name: %s\n", array[i][0]);  /* First element: Device name */
-					printf("Playback device ID: %s\n",   array[i][1]);  /* Second element: Device ID */
+					DEBUG("Playback device name: %s", array[i][0]);  /* First element: Device name */
+					DEBUG("Playback device ID: %s",   array[i][1]);  /* Second element: Device ID */
 
 					/* Free element */
 					ts3Functions.freeMemory(array[i][0]);
@@ -630,23 +550,23 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 				}
 				ts3Functions.freeMemory(array);  /* Free complete array */
 			} else {
-				printf("Error getting playback device list\n");
+				ERROR("Error getting playback device list");
 			}
 		} else {
-			printf("Error getting default playback mode\n");
+			ERROR("Error getting default playback mode");
 		}
 		char** array;
 
 		if(ts3Functions.getPlaybackModeList(&array) == ERROR_ok) {
 			for(i=0; array[i] != NULL; ++i) {
-				printf("Mode: %s\n", array[i]);
+				DEBUG("Mode: %s", array[i]);
 				ts3Functions.freeMemory(array[i]);  // Free C-string
 			}
 			ts3Functions.freeMemory(array);  // Free the array
 		}
 
 		if (ts3Functions.openPlaybackDevice(serverConnectionHandlerID, "custom", devID) != ERROR_ok){
-			printf("Error opening playback device\n");
+			ERROR("Error opening playback device");
 			exit(1);
 		}
 
@@ -668,8 +588,8 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 }
 
 int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetMode, anyID toID, anyID fromID, const char* fromName, const char* fromUniqueIdentifier, const char* message, int ffIgnored) {
-    printf("[DEBUG] ts3plugin_onTextMessageEvent!\n");
-	printf("PLUGIN: onTextMessageEvent %llu %d %d %s %s %d\n", (long long unsigned int)serverConnectionHandlerID, targetMode, fromID, fromName, message, ffIgnored);
+    DEBUG("ts3plugin_onTextMessageEvent!");
+	DEBUG("PLUGIN: onTextMessageEvent %llu %d %d %s %s %d", (long long unsigned int)serverConnectionHandlerID, targetMode, fromID, fromName, message, ffIgnored);
 
 	/* Friend/Foe manager has ignored the message, so ignore here as well. */
 	if(ffIgnored) {
@@ -679,10 +599,10 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 	//TODO check if command is enabled
 
 	if (strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())) == 0){
-		printf("[DEBUG] got a command!!!!\n");
+		DEBUG("got a command!!!!");
 		anyID myID;
 		if(ts3Functions.getClientID(serverConnectionHandlerID, &myID) != ERROR_ok) {
-			ts3Functions.logMessage("Error querying own client id", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+			ERROR("Error querying own client id");
 			return 1;
 		}
 
@@ -694,20 +614,17 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 
 		at_message[at_message_len] = '\0';
 		int at_output = at_process_command(at_message, &output);
-		// char* mymessage = "!test phonebook read 1 9\0";
-		// int at_output = at_process_command(mymessage, &output);
-		printf("[DEBUG] output of at_command: %s\n", output);
+		DEBUG("output of at_command: %s", output);
 		if (output == NULL) //we did not handle the command
 			return ts3plugin_processCommand(serverConnectionHandlerID, message);
 		else {
-			printf("[DEBUG] I should reply: %s\n", output);
+			DEBUG("I should reply: %s", output);
 
 			uint64 myChannelID;
 			/* Get own channel ID */
 			if(ts3Functions.getChannelOfClient(serverConnectionHandlerID, myID, &myChannelID) != ERROR_ok) {
-				ts3Functions.logMessage("Error querying channel ID", LogLevel_ERROR, "Plugin", serverConnectionHandlerID);
+				ERROR("Error querying channel ID");
 			}
-			// printf("[DEBUG] got channel id: %li and serverConnHandlID %li\n", myChannelID, serverConnectionHandlerID);
 
 			ts3Functions.requestSendChannelTextMsg(
 				serverConnectionHandlerID,
@@ -717,12 +634,12 @@ int ts3plugin_onTextMessageEvent(uint64 serverConnectionHandlerID, anyID targetM
 			);
 			//TODO scommenta
 			// free(output);
-			printf("[DEUBG] at_output is %i\n", at_output);
+			DEBUG("at_output is %i", at_output);
 			return at_output;
 		}
 
 	} else {
-		printf("[DEBUG] message/keyword/kw/cmp: %s/%s/%li/%i\n", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
+		DEBUG("message/keyword/kw/cmp: %s/%s/%li/%i", message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword()), strncmp(message, ts3plugin_commandKeyword(), strlen(ts3plugin_commandKeyword())));
 	}
 
     return 1;  /* 0 = handle normally, 1 = client will ignore the text message */
