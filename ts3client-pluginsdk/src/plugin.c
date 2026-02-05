@@ -62,18 +62,8 @@ static char* pluginID = NULL;
 
 static struct TS3Functions ts3Functions;
 
-#ifdef _WIN32
-/* Helper function to convert wchar_T to Utf-8 encoded strings on Windows */
-static int wcharToUtf8(const wchar_t* str, char** result) {
-	int outlen = WideCharToMultiByte(CP_UTF8, 0, str, -1, 0, 0, 0, 0);
-	*result = (char*)malloc(outlen);
-	if(WideCharToMultiByte(CP_UTF8, 0, str, -1, *result, outlen, 0, 0) == 0) {
-		*result = NULL;
-		return -1;
-	}
-	return 0;
-}
-#endif
+pthread_t t1;
+pthread_t t2;
 
 /*********************************** Required functions ************************************/
 /*
@@ -88,19 +78,7 @@ void* main_loop_acquire(void* args);
 
 /* Unique name identifying this plugin */
 const char* ts3plugin_name() {
-#ifdef _WIN32
-	/* TeamSpeak expects UTF-8 encoded characters. Following demonstrates a possibility how to convert UTF-16 wchar_t into UTF-8. */
-	static char* result = NULL;  /* Static variable so it's allocated only once */
-	if(!result) {
-		const wchar_t* name = TEXT(PLUGIN_NAME)//L"Test Plugin";
-		if(wcharToUtf8(name, &result) == -1) {  /* Convert name into UTF-8 encoded result */
-			result = PLUGIN_NAME;  /* Conversion failed, fallback here */
-		}
-	}
-	return result;
-#else
 	return PLUGIN_NAME;
-#endif
 }
 
 #define BUFFER_SIZE 10000
@@ -403,6 +381,11 @@ void ts3plugin_shutdown() {
 		free(pluginID);
 		pluginID = NULL;
 	}
+
+	ts3Functions.unregisterCustomDevice(devID);
+	pthread_cancel(t1);
+	pthread_cancel(t2);
+
 }
 
 /****************************** Optional functions ********************************/
@@ -596,8 +579,6 @@ void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionHandlerID, int 
 		sem_init(&c_pb_sem, 0, 1);
 		sem_init(&noise_sem, 0, 1);
 
-		pthread_t t1;
-		pthread_t t2;
 		// pthread_create(&t1, NULL, main_loop_play, NULL);
 		pthread_create(&t1, NULL, main_loop_play, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
 		pthread_create(&t2, NULL, main_loop_acquire, ((void *)(&ts3Functions))); //TODO thread should be global, stop when disconneting
