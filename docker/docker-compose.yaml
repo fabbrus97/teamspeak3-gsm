@@ -19,6 +19,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+    shm_size: '2gb'
 
 # volumes:
 #  ts3_config:
