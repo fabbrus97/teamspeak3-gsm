@@ -1,8 +1,8 @@
 #
 # Makefile to build TeamSpeak 3 Client Test Plugin
 #
-
-OUTPUT = "${HOME}/Scaricati/TeamSpeak3-Client-linux_amd64/plugins/test_plugin.so"
+TS_PATH='Scaricati/TeamSpeak3-Client-linux_amd64'
+OUTPUT = "${HOME}/$(TS_PATH)/plugins/test_plugin.so"
 # CFLAGS = -c -O2 -Wall -fPIC
 CFLAGS = -c -g -O0 -fPIC -Wall # -w
 SPICIER_CFLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Wstringop-overflow -Wstringop-truncation -g -c -fPIC
