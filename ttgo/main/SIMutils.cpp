@@ -4,7 +4,6 @@ int ACCEPT_ONLY_PB = 0;
 
 int call_in_progress = 0; 
 int recording_noise = 0; 
-// extern SoftwareSerial GPRS(3, 2);
 
 
 int check_caller_in_pb(const char* str){
@@ -13,7 +12,6 @@ int check_caller_in_pb(const char* str){
   while (str[i] != '\0'){
     if (str[i] == ','){
       comma_counter += 1;
-      // Serial.print("Found a comma, now counter is "); Serial.println(comma_counter);
       i+=1;
       continue;
     }
@@ -30,7 +28,6 @@ int check_caller_in_pb(const char* str){
     i=i+1;
   
   }
-  // Serial.println("found anything :-(");
   return ret_value;
 }
 
@@ -39,7 +36,6 @@ void parse_serial(const char* str){
   printf("[DEBUG] checking string %s\n", str);
   
   if (strncmp("RING", str, 4) == 0){
-    printf("[DEBUG] got a caller!\n");
     if ((ACCEPT_ONLY_PB && check_caller_in_pb(str)) || !ACCEPT_ONLY_PB){
       if (call_in_progress){
         SerialAT.write("AT+CHLD=2\n");
