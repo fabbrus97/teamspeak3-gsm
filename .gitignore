@@ -1,6 +1,7 @@
-*.o
-.env
-*.out
-.vscode/
-.vscode/settings.json
+**/*.o
+**/*.env
+**/*.out
+**/*.vscode/
+**/*.vscode/settings.json
 **/.vscode/
+**/*.local
