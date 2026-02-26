@@ -6,7 +6,7 @@
 #include "TSutils.hpp"
 
 static char packetBuffer[UDP_READ];
-IPAddress serverAddress(192, 168, 1, 14); //define server address - tomahawk
+IPAddress serverAddress(192, 168, 1, 14); //define server address - alpheratz
 //IPAddress serverAddress(192, 168, 1, 19); //define server address - framework
 // IPAddress serverAddress(192, 168, 180, 93);
 uint16_t serverPort = 8078; //define server port - send the voice to be played on TS
