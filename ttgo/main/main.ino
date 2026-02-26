@@ -87,9 +87,6 @@ portMUX_TYPE new_audioMuxS = portMUX_INITIALIZER_UNLOCKED;
 
 hw_timer_t* timer = NULL;
 
-// CANCELLAMI - PER TEST
-int wolverine_pos = 0;
-
 /*
  *
  * Functions
@@ -109,8 +106,6 @@ void ARDUINO_ISR_ATTR timer_callback() {
 
       // ledcWrite(AUDIOPIN_OUT, (uint8_t)(audio_buffer[played_audio_pos]));
       dac_output_voltage(DAC_CHANNEL_1, (uint8_t)(audio_buffer[played_audio_pos]));
-      // dac_output_voltage(DAC_CHANNEL_1, audio_data[wolverine_pos++]);
-      // wolverine_pos %= sizeof(audio_data);
 
 
       audio_buffer[played_audio_pos] = 0;
@@ -344,30 +339,6 @@ void taskloop(void * parameter){
   }
 }
 
-
-void play_wolverine() {  //FIXME
-  printf("[DEBUG] playing 'wolverine!'\n");
-  int time2sleep = 1000000 / 8000;
-  for (int i = 0; i < sizeof(audio_data); i++) {
-    //printf("%i,", audio_data[i]);
-    //analogWrite(AUDIOPIN, audio_data[i]);
-    auto t1 = micros();
-    // ledcWrite(AUDIOPIN_OUT, audio_data[i] >> 1); // dividiamo perche' altrimenti si spegne tutto
-    dac_output_voltage(DAC_CHANNEL_1, audio_data[i]);
-    // pwm_out.pulse_perc((audio_data[i]/255.0f) * 100);
-    auto t2 = micros();
-    delayMicroseconds(time2sleep - (t2 - t1));
-    //delayMicroseconds(125 - (t2-t1));
-  }
-  // ledcWrite(AUDIOPIN_OUT, 0); 
-  dac_output_voltage(DAC_CHANNEL_1, 0);
-  // pwm_out.pulse_perc(0);
-  printf("\n");
-
-}
-
-uint8_t val = 0;
-
 size_t last_at_time = time(NULL);
 
 void loop() {
@@ -424,33 +395,6 @@ void loop() {
 
     }
   }
-
-
-    // while (SerialAT.available()) {
-    //   String input = SerialAT.readString();
-    //   SerialMon.write(input.c_str());
-
-    //   // int cmp = strncmp("RING", input.c_str(), 6);
-    //   if (input.substring(2,6) == "RING"){ 
-    //     set_voice_paths();
-       
-    //     SerialAT.write("ATA\r\n");
-
-    //     sleep(3);
-    //     play_wolverine(); 
-    //   }
-
-
-    // }
-
-    // while (SerialMon.available()){
-    //   String input = SerialMon.readString();
-    //   for(size_t i = 0; i < input.length(); i++){
-    //     SerialMon.print(".");
-    //     SerialMon.print(input[i]);
-    //   }
-    //   SerialAT.write(input.c_str());
-    // }
 
     if (time(NULL) > last_at_time + 60){
       printf("sending AT to keep alive...\n");
