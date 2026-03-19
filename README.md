@@ -3,6 +3,8 @@
 [![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#experimental)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![ttgo](ttgo.jpg)
+
 This project transforms a TTGO T-Call ESP32 board into a GSM gateway for TeamSpeak 3. It allows you to make and receive phone calls directly from a TeamSpeak channel. The system is composed of four parts:
 
 1.  **Firmware:** Runs on the TTGO T-Call board, handling the GSM connection and audio streaming over WiFi.
