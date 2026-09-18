@@ -35,7 +35,7 @@ void parse_serial(const char* str){
 
   printf("[DEBUG] checking string %s\n", str);
   
-  if (strncmp("RING", str, 4) == 0){
+  if (strstr(str, "RING") != NULL){
     if ((ACCEPT_ONLY_PB && check_caller_in_pb(str)) || !ACCEPT_ONLY_PB){
       if (call_in_progress){
         SerialAT.write("AT+CHLD=2\n");
@@ -46,7 +46,7 @@ void parse_serial(const char* str){
     }
   }
 
-  if (strncmp("NO CARRIER", str, 10) == 0){ 
+  if (strstr(str, "NO CARRIER") != NULL || strstr(str, "BUSY") != NULL || strstr(str, "NO ANSWER") != NULL){ 
     call_in_progress = 0;
   }
 

@@ -254,6 +254,10 @@ void* main_loop_play(void* args){
 
             // Send to TeamSpeak
 			ts3Functions.processCustomCaptureData("ts3callbotplayback", chunk, bytes2play);
+            
+            // Pace the audio delivery: 256 samples at 8000Hz is 32ms.
+            // Sleep slightly less than 32ms to allow catching up without flooding.
+            usleep(30000); 
 
 		} else {
             sem_post(&c_pb_sem);
