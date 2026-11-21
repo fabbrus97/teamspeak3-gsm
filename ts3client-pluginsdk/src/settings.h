@@ -27,6 +27,9 @@ extern int allow_delete_sms;
 extern int allow_make_call;
 extern int allow_create_contacts;
 extern int allow_delete_contacts;
+extern int audio_sample_rate; //rate of the audio exchanged with the ucontroller, both directions; must match AUDIO_SAMPLE_RATE in the firmware; defaults to 16000
+extern int audio_bandpass_low_hz; //high-pass cutoff applied to the audio from the ucontroller; 0 disables; defaults to 300
+extern int audio_bandpass_high_hz; //low-pass cutoff applied to the audio from the ucontroller; 0 disables; defaults to 3400
 
 void load_settings();
 

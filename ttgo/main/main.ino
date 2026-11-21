@@ -34,8 +34,9 @@
 #include <WiFiUdp.h>
 #include <Wire.h>
 #include <TinyGsmClient.h>
-#include "driver/dac.h"
-#include "driver/adc.h"
+#include "esp_private/sar_periph_ctrl.h"
+#include "esp_cpu.h"
+#include "AudioIO.h"
 #include "TSutils.hpp"
 #include "SIMutils.hpp"
 #include "main.h"
@@ -68,21 +69,25 @@ TaskHandle_t Task1;
 #define BUFFERLOOPSIZE 1024
 char bufferloopcmd[BUFFERLOOPSIZE];
 
-//for audio processing
-int audio_buffer_pos = 0, serial_buffer_pos=0, played_audio_pos = 1024 * 4;
-const int buf_sz = 1024 * 4;
-char audio_buffer[buf_sz];  //orig buf_size = 1024*6
-int audio2send_pos_w = 0, audio2send_sent = 0;
-int justsent = 0;
-const int max_audio2send = 512, audio2send_buffer_sz = max_audio2send * 12;
-int data2copy = 0;
+/*
+ * Audio ring buffers. Each one is single-producer/single-consumer and lock-free:
+ * the timer ISR and loop() run on the same core, every index has exactly one
+ * writer, and data is written before the index that publishes it.
+ */
+// TS -> phone: loop() writes audio_buffer_pos, the ISR writes played_audio_pos
+const int buf_sz = AUDIO_SAMPLE_RATE * AUDIO_PLAY_BUFFER_MS / 1000;
+uint8_t audio_buffer[buf_sz];
+volatile int audio_buffer_pos = 0, played_audio_pos = 0;
+// phone -> TS: the ISR writes audio2send_pos_w, loop() writes audio2send_sent
+const int audio2send_buffer_sz = AUDIO_SAMPLE_RATE * AUDIO_SEND_BUFFER_MS / 1000;
+const int audio2send_chunk = AUDIO_SAMPLE_RATE * AUDIO_SEND_CHUNK_MS / 1000;
 uint8_t audio2send_buffer[audio2send_buffer_sz];
+volatile int audio2send_pos_w = 0, audio2send_sent = 0;
 char bufferloop[BUFFERLOOPSIZE];
 
-portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE timerMuxS = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE bufferMuxS = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE new_audioMuxS = portMUX_INITIALIZER_UNLOCKED;
+#if AUDIO_STATS
+volatile uint32_t st_isr_max_cycles = 0, st_adc_not_ready = 0, st_play_empty = 0, st_play_overrun = 0, st_cap_overrun = 0;
+#endif
 
 hw_timer_t* timer = NULL;
 
@@ -93,39 +98,46 @@ hw_timer_t* timer = NULL;
 */
 
 void taskloop(void * parameter);
+// IRAM_ATTR explicitly: in core 3.x ARDUINO_ISR_ATTR is empty unless CONFIG_ARDUINO_ISR_IRAM is set,
+// so the ISR used to run from flash cache and stall on cache misses
+void timer_callback();
 
-void ARDUINO_ISR_ATTR timer_callback() {
+void IRAM_ATTR timer_callback() {
+#if AUDIO_STATS
+  uint32_t t0 = esp_cpu_get_cycle_count();
+#endif
 
+  // TS -> phone
   if (call_in_progress){
-    portENTER_CRITICAL_ISR(&timerMux);
-
-    if (audio_buffer_pos != played_audio_pos ){
-
-      portEXIT_CRITICAL_ISR(&timerMux);
-
-      // ledcWrite(AUDIOPIN_OUT, (uint8_t)(audio_buffer[played_audio_pos]));
-      dac_output_voltage(DAC_CHANNEL_1, (uint8_t)(audio_buffer[played_audio_pos]));
-
-
-      audio_buffer[played_audio_pos] = 0;
-
-      played_audio_pos++;
-      played_audio_pos = played_audio_pos % buf_sz;
-
+    int r = played_audio_pos;
+    if (r != audio_buffer_pos){
+      audio_dac_write(audio_buffer[r]);
+      if (++r == buf_sz) r = 0;
+      played_audio_pos = r;
     } else {
-      portEXIT_CRITICAL_ISR(&timerMux);
+      STAT_ADD(st_play_empty, 1);
     }
   }
 
-  /********/
-
+  // phone -> TS
   if (call_in_progress || recording_noise)  {
-    portENTER_CRITICAL_ISR(&timerMuxS);
-      audio2send_buffer[audio2send_pos_w++] = adc1_get_raw(ADC1_CHANNEL_6)/16; //(analogRead(AUDIOPIN_IN));
-      audio2send_pos_w %= audio2send_buffer_sz;
-    portEXIT_CRITICAL_ISR(&timerMuxS);
-
+    uint8_t sample = audio_adc_read();
+    int w = audio2send_pos_w;
+    int next = w + 1;
+    if (next == audio2send_buffer_sz) next = 0;
+    if (next != audio2send_sent){
+      audio2send_buffer[w] = sample;
+      COMPILER_BARRIER();
+      audio2send_pos_w = next;
+    } else {
+      STAT_ADD(st_cap_overrun, 1);
+    }
   }
+
+#if AUDIO_STATS
+  uint32_t dt = esp_cpu_get_cycle_count() - t0;
+  if (dt > st_isr_max_cycles) st_isr_max_cycles = dt;
+#endif
 }
 
 bool setPowerBoostKeepOn(int en){
@@ -211,24 +223,29 @@ void setup() {
 
   TSinit();
 
-  timer = timerBegin(1000000);  //timer resolution - 1Mhz
-  timerAttachInterrupt(timer, &timer_callback);
-  // Set alarm to call onTimer function every second (value in microseconds).
-  // Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  timerAlarm(timer, 125, true, 0);  // repeat timer every 1/8000hz; unit is in useconds, thus 125 instead of 0.000125
-
-
-
   if (adc1_config_width(ADC_WIDTH_BIT_12) != ESP_OK){
     Serial.println("cannot configure adc width!!!");
     delay(5000);
   }
-  adc1_config_channel_atten(ADC1_CHANNEL_5,ADC_ATTEN_DB_6); //gpio pin 36
+  // (this used to configure ADC1_CHANNEL_5 / GPIO33, but the ISR reads channel 6 / GPIO34)
+  adc1_config_channel_atten(AUDIO_ADC_CHANNEL, AUDIO_ADC_ATTEN);
+  // one read through the driver sets up controller, channel and width for the ISR
+  adc1_get_raw(AUDIO_ADC_CHANNEL);
+#if AUDIO_FAST_IO
+  // the ISR starts conversions itself, so keep the SAR ADC powered permanently
+  sar_periph_ctrl_adc_oneshot_power_acquire();
+  adc_oneshot_ll_set_channel(ADC_UNIT_1, AUDIO_ADC_CHANNEL);
+#endif
 
-  // SerialMon.write("Sending AT command...\r\n");
   // pinMode(AUDIOPIN_OUT, OUTPUT);
   // ledcAttach(AUDIOPIN_OUT, 24000, 8);
-  dac_output_enable(DAC_CHANNEL_1);
+  dac_output_enable(DAC_CHAN_0);  // GPIO25
+
+  // sample clock, started once ADC and DAC are ready
+  timer = timerBegin(AUDIO_TIMER_HZ);
+  timerAttachInterrupt(timer, &timer_callback);
+  timerAlarm(timer, AUDIO_TIMER_HZ / AUDIO_SAMPLE_RATE, true, 0);  // one tick per sample, auto-reload
+  Serial.printf("Audio: %d Hz, fast IO %d\n", AUDIO_SAMPLE_RATE, AUDIO_FAST_IO);
 
   set_voice_paths();
 
@@ -339,58 +356,58 @@ size_t last_at_time = time(NULL);
 
 void loop() {
 
+  // phone -> TS: send everything buffered once at least AUDIO_SEND_CHUNK_MS is there
   if(call_in_progress || recording_noise){
+    int sent = audio2send_sent;
+    int backlog = audio2send_pos_w - sent;
+    if (backlog < 0) backlog += audio2send_buffer_sz;
 
-    // printf("[DEBUG] call in progress\n");
-    int ts1 = millis();
-    int tmp = -1;
-    portENTER_CRITICAL(&timerMuxS);
-    tmp = audio2send_pos_w;
-    portEXIT_CRITICAL(&timerMuxS);
-    int audio2send = audio2send_sent < tmp ? (tmp - audio2send_sent)%max_audio2send : (audio2send_buffer_sz - audio2send_sent + tmp)%max_audio2send;
-
-    int audio2sendbk = audio2send;
-    if (audio2send > 256){
-      justsent = 1;
-      if (audio2send_sent + audio2send >= audio2send_buffer_sz){
-        // printf("[DEBUG] sending %i\n", audio2send_buffer_sz - audio2send_sent);
-        send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send_buffer_sz - audio2send_sent);
-
-        audio2send = audio2send - (audio2send_buffer_sz - audio2send_sent);
-        audio2send_sent = 0;
-
+    if (backlog >= audio2send_chunk){
+      while (backlog > 0){
+        int n = backlog > AUDIO_MAX_PACKET ? AUDIO_MAX_PACKET : backlog;
+        if (sent + n > audio2send_buffer_sz) n = audio2send_buffer_sz - sent;  // stop at the wrap
+        send_data(AUDIO, &(audio2send_buffer[sent]), n);
+        sent += n;
+        if (sent == audio2send_buffer_sz) sent = 0;
+        backlog -= n;
       }
-      send_data(AUDIO, &(audio2send_buffer[audio2send_sent]), audio2send);
-
-      audio2send_sent = (audio2send_sent + audio2send) % audio2send_buffer_sz;
+      audio2send_sent = sent;  // hand the space back to the ISR
     }
-    
-    int ts2 = millis();
   }
 
-  //get audio data
+  // TS -> phone: queue received audio for the ISR
   if (call_in_progress){
-
     int new_audio_len = get_audio_data(bufferloop);
-    if (new_audio_len>0) {
-        portENTER_CRITICAL(&timerMux);
-        data2copy = buf_sz - audio_buffer_pos > new_audio_len ? new_audio_len : buf_sz - audio_buffer_pos;
-        memcpy(&(audio_buffer[audio_buffer_pos]), bufferloop, data2copy);
-        audio_buffer_pos += data2copy;
-        audio_buffer_pos = audio_buffer_pos % buf_sz;
-        
-        portEXIT_CRITICAL(&timerMux);
-        if (data2copy < new_audio_len){
-          portENTER_CRITICAL(&timerMux);
-          memcpy(&(audio_buffer[audio_buffer_pos]), &(bufferloop[data2copy]), new_audio_len-data2copy);
-          
-          audio_buffer_pos += new_audio_len - data2copy;
-          portEXIT_CRITICAL(&timerMux);
-        }
-        
-
+    if (new_audio_len > 0) {
+      int w = audio_buffer_pos;
+      int free_space = played_audio_pos - w - 1;
+      if (free_space < 0) free_space += buf_sz;
+      if (new_audio_len > free_space){  // full: drop the excess instead of overwriting unplayed audio
+        STAT_ADD(st_play_overrun, new_audio_len - free_space);
+        new_audio_len = free_space;
+      }
+      int first = buf_sz - w;
+      if (first > new_audio_len) first = new_audio_len;
+      memcpy(&(audio_buffer[w]), bufferloop, first);
+      memcpy(&(audio_buffer[0]), &(bufferloop[first]), new_audio_len - first);
+      w += new_audio_len;
+      if (w >= buf_sz) w -= buf_sz;
+      COMPILER_BARRIER();
+      audio_buffer_pos = w;
     }
   }
+
+#if AUDIO_STATS
+  static uint32_t last_stats = 0;
+  if ((call_in_progress || recording_noise) && millis() - last_stats > 5000){
+    last_stats = millis();
+    uint32_t isr_us10 = st_isr_max_cycles * 10 / getCpuFrequencyMhz();
+    printf("[AUDIO] %d Hz | ISR max %lu.%lu us of %d us | adc not ready %lu | play empty ticks %lu | play overrun %lu | capture overrun %lu\n",
+           AUDIO_SAMPLE_RATE, isr_us10 / 10, isr_us10 % 10, 1000000 / AUDIO_SAMPLE_RATE,
+           st_adc_not_ready, st_play_empty, st_play_overrun, st_cap_overrun);
+    st_isr_max_cycles = 0; st_adc_not_ready = 0; st_play_empty = 0; st_play_overrun = 0; st_cap_overrun = 0;
+  }
+#endif
 
     if (time(NULL) > last_at_time + 60){
       printf("sending AT to keep alive...\n");

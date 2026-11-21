@@ -25,6 +25,7 @@
 #include "teamspeak/clientlib_publicdefinitions.h"
 #include "plugin.h"
 #include "utils/clog.h"
+#include "utils/filter.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <unistd.h>
@@ -86,7 +87,7 @@ const char* ts3plugin_name() {
 short audio_buffer_to_ds[BUFFER_SIZE];
 int data_in_buffer = 0;
 
-#define audio_buffer_size 6144
+#define audio_buffer_size 12288 // audio from the ucontroller: 768 ms at 16 kHz
 size_t audio_buffer_pos = 0, audio_buffer_played=0;
 short audio_buffer[audio_buffer_size];
 
@@ -149,7 +150,8 @@ int ts3plugin_init() {
 	load_settings();
 
 	// 1. create audio playback device
-	if (ts3Functions.registerCustomDevice(devID, devDisplayName, 8000, 1, 48000, 1) != ERROR_ok){
+	// capture = audio from the ucontroller, at its rate (ts resamples it); playback = what we get from ts, 48 kHz
+	if (ts3Functions.registerCustomDevice(devID, devDisplayName, audio_sample_rate, 1, 48000, 1) != ERROR_ok){
 		ERROR("Error registering playback device");
 		exit(1);
 	}
@@ -194,9 +196,8 @@ void* main_loop_play(void* args){
 		 * see https://teamspeakdocs.github.io/PluginAPI/client_html/ar01s13s05.html
 
 		 */
-		size_t playbackBufferSize = 512*6; //I know this will be reduced to 512 due to downsample
-		// I know it will take 512 * 1/8000 = 0.064 seconds to reproduce
-		// so when I send more than 1 sec of playback in less than 1 sec of time, I pause sending voice
+		size_t playbackBufferSize = 512*6; // 3072 samples at 48 kHz = 64 ms of audio, whatever audio_sample_rate is
+		// (after downsampling: 512 samples at 8 kHz, 1024 at 16 kHz)
 		short playbackBuffer[playbackBufferSize];
 
 		if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
@@ -210,8 +211,7 @@ void* main_loop_play(void* args){
 		if (start < 0)
 			start = now;
 
-		// I always send 512 samples that, at 8khz, take 0.064 seconds to play
-		// and I need to be a little bit faster than that
+		// I always send 64 ms of audio per round
 		if (now - start > 64){
 			int error = ts3Functions.acquireCustomPlaybackData("ts3callbotplayback", playbackBuffer, playbackBufferSize);
 
@@ -271,6 +271,11 @@ void* main_loop_acquire(void* args){
 	size_t receivedBytes;
 	size_t bytes2write;
 
+	// GSM voice is ~300-3400 Hz: drop the board noise outside that band (and the ADC DC offset)
+	bandpass_t bandpass;
+	bandpass_init(&bandpass, audio_sample_rate, audio_bandpass_low_hz, audio_bandpass_high_hz);
+	INFO("band-pass on ucontroller audio: %i stages", bandpass.stages);
+
 	char* _noisefilepathtmp = malloc(sizeof(char)*100);
 	char* noisefilepathtmp = malloc(sizeof(char)*100);
 	char* noisefinalpath = malloc(sizeof(char)*100);
@@ -299,7 +304,10 @@ void* main_loop_acquire(void* args){
 		sem_post(&noise_sem);
 
 
-		receivedBytes = receive_data(&mybuffer);
+		ssize_t received = receive_data(&mybuffer);
+		if (received <= 0)
+			continue;
+		receivedBytes = (size_t)received;
 
 		sem_wait(&noise_sem);
 
@@ -329,36 +337,43 @@ void* main_loop_acquire(void* args){
 
 
 
+		// wait for room in the ring buffer
+		// (the old check let a write that wraps run over unplayed audio, and busy-waited)
+		if (receivedBytes > audio_buffer_size - 1)
+			receivedBytes = audio_buffer_size - 1;
 		while (1){
 			sem_wait(&c_pb_sem);
-			if ((audio_buffer_pos + receivedBytes <= audio_buffer_played || audio_buffer_pos >= audio_buffer_played)){
-				sem_post(&c_pb_sem);
-				break;
-			}
+			size_t free_space = (audio_buffer_played + audio_buffer_size - audio_buffer_pos - 1) % audio_buffer_size;
 			sem_post(&c_pb_sem);
-
+			if (free_space >= receivedBytes)
+				break;
+			usleep(1000);
 		}
 
+		// write it, wrapping around the end of the buffer
+		// (the old code dropped the part of the packet past the end, once per lap of the buffer)
+		size_t written = 0;
+		while (written < receivedBytes){
+			bytes2write = audio_buffer_size - audio_buffer_pos;
+			bytes2write = bytes2write > receivedBytes - written ? receivedBytes - written : bytes2write;
 
-		bytes2write = audio_buffer_size - audio_buffer_pos;
-		bytes2write = bytes2write > receivedBytes ? receivedBytes : bytes2write;
-
-
-		for (size_t i = 0; i < bytes2write; i++){
-			
 			sem_wait(&noise_sem);
-			if (!noise_cancelnoise || recording_noise)
-				audio_buffer[audio_buffer_pos+i] = (short) (mybuffer[i] - 0x80) << 8;
-			else
-				audio_buffer[audio_buffer_pos+i] = (short) (denoised_audio_buffer[i] - 0x80) << 8;
+			for (size_t i = 0; i < bytes2write; i++){
+				uint8_t raw = (!noise_cancelnoise || recording_noise) ? mybuffer[written + i] : denoised_audio_buffer[written + i];
+				short sample = (short) (raw - 0x80) << 8;
+				if (!recording_noise)
+					sample = bandpass_process(&bandpass, sample);
+				audio_buffer[audio_buffer_pos + i] = sample;
+			}
 			sem_post(&noise_sem);
-			
 
+			sem_wait(&c_pb_sem);
+			audio_buffer_pos = (audio_buffer_pos + bytes2write) % audio_buffer_size;
+			sem_post(&c_pb_sem);
+			written += bytes2write;
 		}
-		sem_wait(&c_pb_sem);
-		audio_buffer_pos = (audio_buffer_pos + bytes2write) % audio_buffer_size;
-		sem_post(&c_pb_sem);
-			// free(&mybuffer); //TODO memory leak!
+		free(mybuffer); // was leaked on every packet
+		mybuffer = NULL;
 	}
 
 

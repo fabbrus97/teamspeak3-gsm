@@ -2,8 +2,8 @@
 
 int ACCEPT_ONLY_PB = 0;
 
-int call_in_progress = 0; 
-int recording_noise = 0; 
+volatile int call_in_progress = 0;
+volatile int recording_noise = 0;
 
 
 int check_caller_in_pb(const char* str){

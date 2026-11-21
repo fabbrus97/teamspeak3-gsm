@@ -73,21 +73,33 @@ int send_voice(short* samples, int sample_cnt){
     DEBUG("SENDING AUDIO TO %s:%i", ucontroller_address, ucontroller_audio_port);
     inet_pton(AF_INET, ucontroller_address, &test_client_addr.sin_addr); // Convert IP address to binary
 
-    size_t const obuf_size = (size_t)(sample_cnt*OSIZE/ISIZE + .5);
+    // One resampler for the whole session, fed block after block: a fresh soxr_oneshot()
+    // per block restarted the filter every 64 ms and left a discontinuity at each block edge.
+    static soxr_t resampler = NULL;
+    soxr_error_t error;
+    if (resampler == NULL){
+        soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
+        soxr_quality_spec_t qSpec = soxr_quality_spec(SOXR_HQ, 0); // same quality soxr_oneshot() used by default
+        resampler = soxr_create(ISIZE, audio_sample_rate, 1, &error, &ioSpec, &qSpec, NULL);
+        if (error){
+            ERROR("cannot create the resampler: %s", error);
+            resampler = NULL;
+            return 1;
+        }
+        INFO("resampling ts audio %i -> %i Hz", ISIZE, audio_sample_rate);
+    }
+
+    size_t const obuf_size = (size_t)sample_cnt * audio_sample_rate / ISIZE + 64;
 
     short downsampled[obuf_size];
     size_t odone;
-    soxr_error_t error;
 
-    soxr_io_spec_t ioSpec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);
+    error = soxr_process(resampler,
+      samples, sample_cnt, NULL,         /* Input. */
+      downsampled, obuf_size, &odone);   /* Output. */
 
-    error = soxr_oneshot(ISIZE, OSIZE, 1, /* Rates and # of chans. */
-      samples, sample_cnt, NULL,                              /* Input. */
-      downsampled, obuf_size, &odone,                             /* Output. */
-      &ioSpec, NULL, NULL);       /* Default configuration.*/
-    
     if (error)
-        ERROR("there was an error during downsampling");
+        ERROR("there was an error during downsampling: %s", error);
     
     if (odone == 0){
         DEBUG("downsample: odone is 0");

@@ -22,6 +22,9 @@ int allow_delete_sms=1;
 int allow_make_call=1;
 int allow_create_contacts=1;
 int allow_delete_contacts=1;
+int audio_sample_rate = 16000;
+int audio_bandpass_low_hz = 300;
+int audio_bandpass_high_hz = 3400;
 
 void load_settings(){
 
@@ -100,6 +103,9 @@ void load_settings(){
 	const int ini_allow_make_call = iniparser_getint(ini, "permissions:allow_make_call", 0);
 	const int ini_allow_create_contacts = iniparser_getint(ini, "permissions:allow_create_contacts", 0);
 	const int ini_allow_delete_contacts = iniparser_getint(ini, "permissions:allow_delete_contacts", 0);
+	const int ini_audio_sample_rate = iniparser_getint(ini, "audio:sample_rate", audio_sample_rate);
+	const int ini_audio_bandpass_low_hz = iniparser_getint(ini, "audio:bandpass_low_hz", audio_bandpass_low_hz);
+	const int ini_audio_bandpass_high_hz = iniparser_getint(ini, "audio:bandpass_high_hz", audio_bandpass_high_hz);
 
 	//then check env variables
 	const char* env_channel = getenv("TSGSM_TSCHANNEL"); // Get the value of $HOME
@@ -117,6 +123,9 @@ void load_settings(){
 	const char* env_allow_make_call = getenv("TSGSM_ALLOW_MAKE_CALL");
 	const char* env_allow_create_contacts = getenv("TSGSM_ALLOW_CREATE_CONTACTS");
 	const char* env_allow_delete_contacts = getenv("TSGSM_ALLOW_DELETE_CONTACTS");
+	const char* env_audio_sample_rate = getenv("TSGSM_SAMPLE_RATE");
+	const char* env_audio_bandpass_low_hz = getenv("TSGSM_BANDPASS_LOW_HZ");
+	const char* env_audio_bandpass_high_hz = getenv("TSGSM_BANDPASS_HIGH_HZ");
 
 
 	ucontroller_cmd_port = env_ucontroller_at_port == NULL ? ini_ucontroller_at_port : atoi(env_ucontroller_at_port); 
@@ -152,6 +161,14 @@ void load_settings(){
 	allow_create_contacts = env_allow_create_contacts != NULL ? atoi(env_allow_create_contacts) : ini_allow_create_contacts;
 	allow_delete_contacts = env_allow_delete_contacts != NULL ? atoi(env_allow_delete_contacts) : ini_allow_delete_contacts;
 
+	audio_sample_rate = env_audio_sample_rate != NULL ? atoi(env_audio_sample_rate) : ini_audio_sample_rate;
+	if (audio_sample_rate < 4000 || audio_sample_rate > 48000){
+		ERROR("invalid audio sample_rate %i, using 16000", audio_sample_rate);
+		audio_sample_rate = 16000;
+	}
+	audio_bandpass_low_hz = env_audio_bandpass_low_hz != NULL ? atoi(env_audio_bandpass_low_hz) : ini_audio_bandpass_low_hz;
+	audio_bandpass_high_hz = env_audio_bandpass_high_hz != NULL ? atoi(env_audio_bandpass_high_hz) : ini_audio_bandpass_high_hz;
+
 	iniparser_freedict(ini);
 	free(fullpath);
 	free(fullpath2);
@@ -161,6 +178,7 @@ void load_settings(){
 
     DEBUG("ts ip to bind is ini/env/final: %s/%s/%s", ini_ts_ip_bind, env_ts_ip_bind, ts_ip_bind);
     DEBUG("ucontroller ip: %s cmd port: %i", ucontroller_address, ucontroller_cmd_port); //, ucontroller_cmd_port);
+	INFO("audio: %i Hz, band-pass %i-%i Hz", audio_sample_rate, audio_bandpass_low_hz, audio_bandpass_high_hz);
 	INFO("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
 
 }

@@ -18,3 +18,9 @@ allow_send_sms=1
 allow_delete_sms=1
 allow_create_contacts=1
 allow_delete_contacts=1
+
+[audio]
+# audio exchanged with the ucontroller
+sample_rate=16000 #Hz, both directions; MUST match AUDIO_SAMPLE_RATE in ttgo/main/SETTINGS.h
+bandpass_low_hz=300 #high-pass on the audio from the ucontroller, 0 disables
+bandpass_high_hz=3400 #low-pass on the audio from the ucontroller, 0 disables
