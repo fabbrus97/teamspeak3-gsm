@@ -15,7 +15,7 @@ config:
 	mkdir -p $(SHARE_PATH)
 
 test_plugin: server.o plugin.o at_commands.o settings.o noise_clean.o filter.o
-	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o noise_clean.o -lsoxr -liniparser 
+	gcc -o $(OUTPUT) -shared plugin.o server.o at_commands.o settings.o noise_clean.o filter.o -lsoxr -liniparser -lm
 # -liconv -lm -lkissfft-float
 #-lcoap-3-notls 
 
