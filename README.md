@@ -180,7 +180,11 @@ This is a complete list of variables you may need to change.
 | **TeamSpeak Plugin** | | |
 | `ts3client-pluginsdk/settings.ini`| `ip` | IP address of the TTGO T-Call device. |
 | | `at_port` | The TCP port for sending AT commands to the TTGO (default `8001`). |
+| | `[audio] sample_rate` | Sample rate of the call audio, both directions (default `16000`). Must match `AUDIO_SAMPLE_RATE` in the firmware. |
+| | `[audio] bandpass_low_hz` / `bandpass_high_hz` | Band-pass applied to the audio coming from the TTGO (default `300` / `3400`, `0` disables either side). |
 | **Firmware** | | |
+| `ttgo/main/SETTINGS.h` | `AUDIO_SAMPLE_RATE` | Sample rate of the call audio (default `16000`, the old value was `8000`). Must match `[audio] sample_rate` in the plugin. |
+| `ttgo/main/AudioIO.h` | `AUDIO_FAST_IO`, `AUDIO_STATS`, ... | Low-level audio options: register-level ADC/DAC access from the ISR (set `AUDIO_FAST_IO` to `0` to fall back to the driver calls), and periodic `[AUDIO]` timing/buffer stats on the serial monitor during calls. |
 | `ttgo/main/main.ino` | `ssid` | The SSID of the WiFi network for the TTGO. |
 | | `password`| The password for the WiFi network. |
 | | `staticIP` | The static IP address for the TTGO device itself. |

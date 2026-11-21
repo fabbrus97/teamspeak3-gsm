@@ -25,8 +25,7 @@
 #include "utils/clog.h"
 
 
-#define ISIZE 48000
-#define OSIZE 8000
+#define ISIZE 48000 //rate of the audio we get from the ts client; the ucontroller side runs at audio_sample_rate (settings.h)
 
 
 // char* server_address;
