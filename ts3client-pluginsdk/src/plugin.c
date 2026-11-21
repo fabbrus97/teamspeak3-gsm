@@ -254,7 +254,7 @@ void* main_loop_play(void* args){
 
             // Send to TeamSpeak
 			ts3Functions.processCustomCaptureData("ts3callbotplayback", chunk, bytes2play);
-
+            
 		} else {
             sem_post(&c_pb_sem);
 			usleep(1000);

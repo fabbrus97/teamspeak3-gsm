@@ -36,7 +36,6 @@
 #include <TinyGsmClient.h>
 #include "driver/dac.h"
 #include "driver/adc.h"
-#include "wolverine.h"
 #include "TSutils.hpp"
 #include "SIMutils.hpp"
 #include "main.h"
@@ -194,8 +193,6 @@ void setup() {
   SerialMon.print("Modem Info: ");
   SerialMon.println(modemInfo);
 
-  // modem.sendSMS("+393312816616", "Hello from TTGO");
-
   Serial.println("Configuring WiFi...");
   WiFi.config(staticIP, gateway, subnet);
   Serial.println("Connecting to WiFi...");
@@ -229,7 +226,6 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_5,ADC_ATTEN_DB_6); //gpio pin 36
 
   // SerialMon.write("Sending AT command...\r\n");
-  // SerialAT.print("ATD3312816616\r\n");
   // pinMode(AUDIOPIN_OUT, OUTPUT);
   // ledcAttach(AUDIOPIN_OUT, 24000, 8);
   dac_output_enable(DAC_CHANNEL_1);
